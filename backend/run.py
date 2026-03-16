@@ -11,5 +11,5 @@ if __name__ == '__main__':
         db.create_all()
         print("数据库表创建完成")
     
-    print("启动服务器: http://127.0.0.1:5001")
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    print("启动服务器: http://127.0.0.1:5002")
+    app.run(debug=True, host='0.0.0.0', port=5002)

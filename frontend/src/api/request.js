@@ -25,7 +25,7 @@ request.interceptors.response.use(
   response => {
     // 处理 blob 类型响应（导出功能）
     if (response.config.responseType === 'blob') {
-      return response
+      return response.data
     }
 
     const res = response.data
