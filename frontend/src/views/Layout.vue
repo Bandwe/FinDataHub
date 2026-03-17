@@ -15,11 +15,24 @@
         text-color="#b8c7ce"
         active-text-color="#fff"
       >
-        <el-menu-item v-for="route in routes" :key="route.path" :index="route.path">
+        <!-- 固定路由菜单 -->
+        <el-menu-item v-for="item in staticMenuItems" :key="item.path" :index="item.path">
           <el-icon size="22">
-            <component :is="route.meta.icon" />
+            <component :is="item.icon" />
           </el-icon>
-          <span class="menu-text">{{ route.meta.title }}</span>
+          <span class="menu-text">{{ item.title }}</span>
+        </el-menu-item>
+        
+        <!-- 自定义模块菜单 -->
+        <el-menu-item 
+          v-for="module in customModules" 
+          :key="'/module/' + module.code" 
+          :index="'/module/' + module.code"
+        >
+          <el-icon size="22">
+            <component :is="module.icon" />
+          </el-icon>
+          <span class="menu-text">{{ module.name }}</span>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -29,10 +42,10 @@
         <div class="header-left">
           <div class="page-icon">
             <el-icon size="24" color="#409EFF">
-              <component :is="$route.meta.icon" />
+              <component :is="currentIcon" />
             </el-icon>
           </div>
-          <div class="header-title">{{ $route.meta.title }}</div>
+          <div class="header-title">{{ currentTitle }}</div>
         </div>
         <div class="header-actions">
           <el-button type="primary" @click="goToCompanyManage" class="action-btn">
@@ -50,21 +63,79 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import {
+  DataAnalysis, TrendCharts, Money, Wallet,
+  UserFilled, User, Coin, Avatar, OfficeBuilding,
+  UploadFilled, Grid
+} from '@element-plus/icons-vue'
+import { getCustomModules } from '../api/customModule'
 
 const route = useRoute()
 const router = useRouter()
 
-const routes = computed(() => {
-  return router.getRoutes()
-    .find(r => r.path === '/')
-    ?.children || []
+// 自定义模块列表
+const customModules = ref([])
+
+// 静态菜单项（避免使用计算属性动态获取路由）
+const staticMenuItems = [
+  { path: '/profit-rate', title: '毛利率与净利率', icon: 'TrendCharts' },
+  { path: '/non-recurring', title: '扣非净利润增长', icon: 'Money' },
+  { path: '/roe-net-asset', title: 'ROE与净资产', icon: 'Wallet' },
+  { path: '/pe-valuation', title: 'PE估值', icon: 'DataAnalysis' },
+  { path: '/shareholder-structure', title: '股东结构', icon: 'UserFilled' },
+  { path: '/shareholder-count', title: '股东户数', icon: 'User' },
+  { path: '/rd-expense', title: '研发投入', icon: 'Coin' },
+  { path: '/rd-staff', title: '研发团队', icon: 'Avatar' },
+  { path: '/companies', title: '公司管理', icon: 'OfficeBuilding' },
+  { path: '/data-import', title: '数据导入', icon: 'UploadFilled' },
+  { path: '/module-manage', title: '模块管理', icon: 'Grid' }
+]
+
+// 当前页面图标
+const currentIcon = computed(() => {
+  // 如果是自定义模块路由
+  if (route.path.startsWith('/module/')) {
+    const moduleCode = route.params.moduleCode
+    const module = customModules.value.find(m => m.code === moduleCode)
+    return module?.icon || 'Grid'
+  }
+  // 固定路由
+  const menuItem = staticMenuItems.find(item => item.path === route.path)
+  return menuItem?.icon || 'Grid'
 })
+
+// 当前页面标题
+const currentTitle = computed(() => {
+  // 如果是自定义模块路由
+  if (route.path.startsWith('/module/')) {
+    const moduleCode = route.params.moduleCode
+    const module = customModules.value.find(m => m.code === moduleCode)
+    return module?.name || '自定义模块'
+  }
+  // 固定路由
+  const menuItem = staticMenuItems.find(item => item.path === route.path)
+  return menuItem?.title || ''
+})
+
+// 获取自定义模块列表
+const fetchCustomModules = async () => {
+  try {
+    const modules = await getCustomModules()
+    customModules.value = modules || []
+  } catch (error) {
+    console.error('获取自定义模块失败:', error)
+  }
+}
 
 const goToCompanyManage = () => {
   router.push('/companies')
 }
+
+onMounted(() => {
+  fetchCustomModules()
+})
 </script>
 
 <style scoped>

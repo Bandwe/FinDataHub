@@ -308,3 +308,103 @@ class RdStaff(db.Model):
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
             'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S') if self.updated_at else None
         }
+
+
+class CustomModule(db.Model):
+    """自定义模块表"""
+    __tablename__ = 'custom_module'
+    
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(50), nullable=False, comment='模块名称')
+    code = db.Column(db.String(30), nullable=False, unique=True, comment='模块代码')
+    icon = db.Column(db.String(50), default='Grid', comment='模块图标')
+    description = db.Column(db.Text, comment='模块描述')
+    sort_order = db.Column(db.Integer, default=0, comment='排序顺序')
+    is_active = db.Column(db.Boolean, default=True, comment='是否启用')
+    created_by = db.Column(db.String(50), comment='创建人')
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    # 关联关系
+    keywords = db.relationship('ModuleKeyword', backref='module', lazy=True, cascade='all, delete-orphan')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'code': self.code,
+            'icon': self.icon,
+            'description': self.description,
+            'sort_order': self.sort_order,
+            'is_active': self.is_active,
+            'created_by': self.created_by,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
+            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S') if self.updated_at else None,
+            'keywords': [k.to_dict() for k in self.keywords] if self.keywords else []
+        }
+
+
+class ModuleKeyword(db.Model):
+    """模块表格关键词表"""
+    __tablename__ = 'module_keyword'
+    
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    module_id = db.Column(db.Integer, db.ForeignKey('custom_module.id'), nullable=False)
+    keyword = db.Column(db.String(50), nullable=False, comment='关键词')
+    label = db.Column(db.String(100), comment='显示标签')
+    data_type = db.Column(db.String(20), default='string', comment='数据类型(string/number/date)')
+    is_required = db.Column(db.Boolean, default=False, comment='是否必填')
+    sort_order = db.Column(db.Integer, default=0, comment='排序顺序')
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    __table_args__ = (
+        db.UniqueConstraint('module_id', 'keyword', name='unique_module_keyword'),
+    )
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'module_id': self.module_id,
+            'keyword': self.keyword,
+            'label': self.label,
+            'data_type': self.data_type,
+            'is_required': self.is_required,
+            'sort_order': self.sort_order,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
+            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S') if self.updated_at else None
+        }
+
+
+class CustomModuleData(db.Model):
+    """自定义模块数据表"""
+    __tablename__ = 'custom_module_data'
+    
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    module_id = db.Column(db.Integer, db.ForeignKey('custom_module.id'), nullable=False)
+    company_id = db.Column(db.Integer, db.ForeignKey('company.id'), nullable=False)
+    year = db.Column(db.Integer, nullable=False)
+    # 动态数据字段存储为JSON
+    data = db.Column(db.JSON, default=dict, comment='动态数据字段')
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    __table_args__ = (
+        db.UniqueConstraint('module_id', 'company_id', 'year', name='unique_module_company_year'),
+    )
+    
+    def to_dict(self):
+        result = {
+            'id': self.id,
+            'module_id': self.module_id,
+            'company_id': self.company_id,
+            'company_name': self.company.name if self.company else None,
+            'company_code': self.company.code if self.company else None,
+            'year': self.year,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
+            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S') if self.updated_at else None
+        }
+        # 合并动态数据字段
+        if self.data:
+            result.update(self.data)
+        return result

@@ -10,6 +10,8 @@ import RdExpense from '../views/RdExpense.vue'
 import RdStaff from '../views/RdStaff.vue'
 import CompanyManage from '../views/CompanyManage.vue'
 import DataImport from '../views/DataImport.vue'
+import ModuleManage from '../views/ModuleManage.vue'
+import CustomModuleView from '../views/CustomModuleView.vue'
 
 const routes = [
   {
@@ -76,6 +78,18 @@ const routes = [
         name: 'DataImport',
         component: DataImport,
         meta: { title: '数据导入', icon: 'UploadFilled' }
+      },
+      {
+        path: 'module-manage',
+        name: 'ModuleManage',
+        component: ModuleManage,
+        meta: { title: '模块管理', icon: 'Grid' }
+      },
+      {
+        path: 'module/:moduleCode',
+        name: 'CustomModule',
+        component: CustomModuleView,
+        meta: { title: '自定义模块', icon: 'Grid' }
       }
     ]
   }
