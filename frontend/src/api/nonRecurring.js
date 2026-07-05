@@ -1,41 +1,29 @@
-import request from './request'
+import {
+  createModuleRecord,
+  deleteModuleRecord,
+  exportModuleRecords,
+  listModuleRecords,
+  updateModuleRecord
+} from './moduleCrud'
+
+const endpoint = '/non_recurring'
 
 export const getNonRecurrings = (params) => {
-  return request({
-    url: '/non_recurring',
-    method: 'get',
-    params
-  })
+  return listModuleRecords(endpoint, params)
 }
 
 export const createNonRecurring = (data) => {
-  return request({
-    url: '/non_recurring',
-    method: 'post',
-    data
-  })
+  return createModuleRecord(endpoint, data)
 }
 
 export const updateNonRecurring = (id, data) => {
-  return request({
-    url: `/non_recurring/${id}`,
-    method: 'put',
-    data
-  })
+  return updateModuleRecord(endpoint, id, data)
 }
 
 export const deleteNonRecurring = (id) => {
-  return request({
-    url: `/non_recurring/${id}`,
-    method: 'delete'
-  })
+  return deleteModuleRecord(endpoint, id)
 }
 
 export const exportNonRecurring = (params) => {
-  return request({
-    url: '/non_recurring/export',
-    method: 'get',
-    params,
-    responseType: 'blob'
-  })
+  return exportModuleRecords(endpoint, params)
 }

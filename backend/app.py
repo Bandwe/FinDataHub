@@ -8,6 +8,7 @@ import webbrowser
 from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 from config import SQLALCHEMY_DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS, CORS_ORIGINS
+from migrations import run_sqlite_migrations
 from models import db
 from api import api_bp
 
@@ -84,6 +85,7 @@ if __name__ == '__main__':
     
     with app.app_context():
         db.create_all()
+        run_sqlite_migrations(app.config['SQLALCHEMY_DATABASE_URI'])
     
     def open_browser():
         time.sleep(1.5)

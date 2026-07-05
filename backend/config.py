@@ -1,7 +1,9 @@
 import os
+import sys
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(os.path.dirname(BASE_DIR), 'data')
+PROJECT_ROOT = os.getcwd() if getattr(sys, 'frozen', False) else os.path.dirname(BASE_DIR)
+DATA_DIR = os.environ.get('FINDATA_DATA_DIR', os.path.join(PROJECT_ROOT, 'data'))
 os.makedirs(DATA_DIR, exist_ok=True)
 
 # 数据库配置

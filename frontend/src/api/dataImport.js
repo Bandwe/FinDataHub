@@ -32,3 +32,12 @@ export const downloadTemplate = () => {
     responseType: 'blob'
   })
 }
+
+// 下载单个固定模块模板
+export const downloadModuleTemplate = (moduleName) => {
+  return request({
+    url: `/templates/${moduleName}`,
+    method: 'get',
+    responseType: 'blob'
+  })
+}

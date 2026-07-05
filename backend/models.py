@@ -311,7 +311,7 @@ class RdStaff(db.Model):
 
 
 class CustomModule(db.Model):
-    """自定义模块表"""
+    """自定义模块/行业模板表"""
     __tablename__ = 'custom_module'
     
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -321,6 +321,10 @@ class CustomModule(db.Model):
     description = db.Column(db.Text, comment='模块描述')
     sort_order = db.Column(db.Integer, default=0, comment='排序顺序')
     is_active = db.Column(db.Boolean, default=True, comment='是否启用')
+    is_locked = db.Column(db.Boolean, default=True, comment='模板是否已确认锁定')
+    locked_at = db.Column(db.DateTime, comment='模板锁定时间')
+    version = db.Column(db.Integer, default=1, comment='模板版本')
+    source_module_id = db.Column(db.Integer, comment='复制来源模板ID')
     created_by = db.Column(db.String(50), comment='创建人')
     created_at = db.Column(db.DateTime, default=datetime.now)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
@@ -337,10 +341,17 @@ class CustomModule(db.Model):
             'description': self.description,
             'sort_order': self.sort_order,
             'is_active': self.is_active,
+            'is_locked': self.is_locked,
+            'locked_at': self.locked_at.strftime('%Y-%m-%d %H:%M:%S') if self.locked_at else None,
+            'version': self.version,
+            'source_module_id': self.source_module_id,
             'created_by': self.created_by,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
             'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S') if self.updated_at else None,
-            'keywords': [k.to_dict() for k in self.keywords] if self.keywords else []
+            'keywords': [
+                k.to_dict() for k in sorted(self.keywords, key=lambda item: item.sort_order or 0)
+                if k.keyword not in {'code', 'name', 'year'}
+            ] if self.keywords else []
         }
 
 
@@ -388,6 +399,8 @@ class CustomModuleData(db.Model):
     data = db.Column(db.JSON, default=dict, comment='动态数据字段')
     created_at = db.Column(db.DateTime, default=datetime.now)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    company = db.relationship('Company', backref='custom_module_data', lazy=True)
+    module = db.relationship('CustomModule', backref='data_records', lazy=True)
     
     __table_args__ = (
         db.UniqueConstraint('module_id', 'company_id', 'year', name='unique_module_company_year'),

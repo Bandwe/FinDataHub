@@ -10,3 +10,4 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 from . import companies, profit_rate, non_recurring, roe_net_asset
 from . import pe_valuation, shareholder_structure, shareholder_count
 from . import rd_expense, rd_staff, templates, data_import, custom_modules, custom_module_data
+from . import industry_templates, industry_data

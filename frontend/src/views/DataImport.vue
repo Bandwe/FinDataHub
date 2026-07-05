@@ -50,14 +50,20 @@
           </template>
         </el-upload>
 
-        <el-form v-if="isSingleSheet" label-width="120px" class="module-select">
+        <el-form label-width="120px" class="module-select">
           <el-form-item label="数据模块">
-            <el-select v-model="selectedModule" placeholder="请选择数据模块">
+            <el-select v-model="selectedModule" placeholder="不选择时自动识别固定模块" clearable style="width: 320px">
               <el-option
                 v-for="(label, value) in moduleOptions"
                 :key="value"
                 :label="label"
                 :value="value"
+              />
+              <el-option
+                v-for="template in industryTemplates"
+                :key="'industry:' + template.code"
+                :label="'行业模板：' + template.name"
+                :value="'industry:' + template.code"
               />
             </el-select>
           </el-form-item>
@@ -197,63 +203,57 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, UploadFilled, View, Upload } from '@element-plus/icons-vue'
-import { previewImportData, executeImportData, downloadTemplate } from '../api/dataImport'
+import { previewImportData, executeImportData, downloadTemplate, downloadModuleTemplate } from '../api/dataImport'
+import { getIndustryTemplates, downloadIndustryTemplate } from '../api/industryTemplate'
+import { importIndustryData } from '../api/industryData'
+import { fixedFinancialModules, fixedModuleOptions } from '../modules/financialModules'
 
 const activeStep = ref(0)
 const uploadRef = ref(null)
 const uploadFile = ref(null)
-const isSingleSheet = ref(false)
 const selectedModule = ref('')
 const activeCollapse = ref([])
+const industryTemplates = ref([])
 
 const previewDataList = ref({})
 const previewSummary = ref(null)
 const importResult = ref({})
 
-const moduleOptions = {
-  profit_rate: '毛利率与净利率',
-  non_recurring: '扣非净利润增长',
-  roe_net_asset: 'ROE与净资产',
-  pe_valuation: 'PE估值',
-  shareholder_structure: '股东结构',
-  shareholder_count: '股东户数',
-  rd_expense: '研发投入',
-  rd_staff: '研发人员'
-}
+const moduleOptions = fixedModuleOptions
+const moduleLabels = { ...fixedModuleOptions }
 
-const moduleLabels = {
-  profit_rate: '毛利率与净利率',
-  non_recurring: '扣非净利润增长',
-  roe_net_asset: 'ROE与净资产',
-  pe_valuation: 'PE估值',
-  shareholder_structure: '股东结构',
-  shareholder_count: '股东户数',
-  rd_expense: '研发投入',
-  rd_staff: '研发人员'
-}
+const isIndustrySelection = () => selectedModule.value.startsWith('industry:')
+const selectedIndustryCode = () => selectedModule.value.replace('industry:', '')
 
 const handleFileChange = (file) => {
   uploadFile.value = file.raw
-  // 这里可以检测是否为单Sheet
-  isSingleSheet.value = false // 简化处理，让后端自动检测
 }
 
 const handleFileRemove = () => {
   uploadFile.value = null
-  isSingleSheet.value = false
   selectedModule.value = ''
 }
 
 const handleDownloadTemplate = async () => {
   try {
-    const blob = await downloadTemplate()
+    let blob
+    let filename = '数据导入模板.xlsx'
+    if (isIndustrySelection()) {
+      blob = await downloadIndustryTemplate(selectedIndustryCode())
+      filename = `${selectedIndustryCode()}_template.xlsx`
+    } else if (selectedModule.value) {
+      blob = await downloadModuleTemplate(selectedModule.value)
+      filename = `${selectedModule.value}_template.xlsx`
+    } else {
+      blob = await downloadTemplate()
+    }
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = '数据导入模板.xlsx'
+    link.download = filename
     link.click()
     window.URL.revokeObjectURL(url)
     ElMessage.success('模板下载成功')
@@ -266,6 +266,10 @@ const handleDownloadTemplate = async () => {
 const handlePreview = async () => {
   if (!uploadFile.value) {
     ElMessage.warning('请先上传文件')
+    return
+  }
+  if (isIndustrySelection()) {
+    ElMessage.warning('行业模板导入当前不走预览，请使用直接导入。')
     return
   }
 
@@ -297,7 +301,7 @@ const handleDirectImport = async () => {
   }
 
   try {
-    await ElMessage.confirm(
+    await ElMessageBox.confirm(
       '确定要直接导入吗？建议先预览数据确认无误后再导入。',
       '直接导入确认',
       {
@@ -330,7 +334,23 @@ const executeImportInternal = async () => {
   }
 
   try {
-    const responseData = await executeImportData(formData)
+    let responseData
+    if (isIndustrySelection()) {
+      const result = await importIndustryData(selectedIndustryCode(), uploadFile.value)
+      responseData = {
+        total_success: result.success,
+        details: {
+          [selectedIndustryCode()]: {
+            success: result.success,
+            error: result.error
+          }
+        },
+        errors: result.errors || []
+      }
+      moduleLabels[selectedIndustryCode()] = industryTemplates.value.find(t => t.code === selectedIndustryCode())?.name || selectedIndustryCode()
+    } else {
+      responseData = await executeImportData(formData)
+    }
     
     importResult.value = {
       success: true,
@@ -365,6 +385,14 @@ const resetImport = () => {
 }
 
 const goToDataPage = () => {
+  if (isIndustrySelection()) {
+    window.location.href = `/module/${selectedIndustryCode()}`
+    return
+  }
+  if (selectedModule.value && fixedFinancialModules[selectedModule.value]) {
+    window.location.href = fixedFinancialModules[selectedModule.value].route
+    return
+  }
   window.location.href = '/profit-rate'
 }
 
@@ -373,6 +401,14 @@ const formatValue = (value) => {
   if (typeof value === 'number') return value.toFixed(2)
   return value
 }
+
+onMounted(async () => {
+  try {
+    industryTemplates.value = await getIndustryTemplates()
+  } catch (error) {
+    console.error('获取行业模板失败:', error)
+  }
+})
 </script>
 
 <style scoped>

@@ -83,13 +83,13 @@ const routes = [
         path: 'module-manage',
         name: 'ModuleManage',
         component: ModuleManage,
-        meta: { title: '模块管理', icon: 'Grid' }
+        meta: { title: '行业模板', icon: 'Grid' }
       },
       {
         path: 'module/:moduleCode',
         name: 'CustomModule',
         component: CustomModuleView,
-        meta: { title: '自定义模块', icon: 'Grid' }
+        meta: { title: '行业数据', icon: 'Grid' }
       }
     ]
   }
