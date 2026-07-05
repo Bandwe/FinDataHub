@@ -5,6 +5,7 @@
 from flask import jsonify, request, send_file
 
 from . import api_bp
+from models import db
 from services.industry_templates import (
     ServiceError,
     clone_template,
@@ -25,6 +26,7 @@ def success(data=None, message='获取成功'):
 
 
 def failure(error):
+    db.session.rollback()
     if isinstance(error, ServiceError):
         return jsonify({'code': error.status_code, 'message': error.message}), error.status_code
     return jsonify({'code': 500, 'message': str(error)}), 500

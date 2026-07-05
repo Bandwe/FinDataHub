@@ -134,8 +134,9 @@ def validate_fields(fields):
 
 
 def replace_template_fields(module, fields):
+    normalized_fields = validate_fields(fields)
     ModuleKeyword.query.filter_by(module_id=module.id).delete()
-    for index, field in enumerate(validate_fields(fields)):
+    for index, field in enumerate(normalized_fields):
         db.session.add(ModuleKeyword(
             module_id=module.id,
             keyword=field['keyword'],
@@ -239,10 +240,12 @@ def clone_template(module_id, data):
 def delete_or_disable_template(module_id):
     module = get_template(module_id)
     has_data = CustomModuleData.query.filter_by(module_id=module.id).first() is not None
-    if has_data:
+    if has_data and module.is_active:
         module.is_active = False
         db.session.commit()
         return {'deleted': False, 'disabled': True}
+    if has_data:
+        CustomModuleData.query.filter_by(module_id=module.id).delete(synchronize_session=False)
     db.session.delete(module)
     db.session.commit()
     return {'deleted': True, 'disabled': False}
@@ -266,7 +269,21 @@ def make_template_workbook(module):
 
 
 def _blank(value):
-    return value is None or value == '' or (isinstance(value, float) and pd.isna(value))
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value.strip() == ''
+    try:
+        missing = pd.isna(value)
+        if isinstance(missing, bool):
+            return missing
+    except (TypeError, ValueError):
+        pass
+    return False
+
+
+def _cell_text(value):
+    return '' if _blank(value) else str(value).strip()
 
 
 def _parse_year(value):
@@ -316,11 +333,36 @@ def _dynamic_data_from_payload(module, data, partial=False):
     for keyword in user_keywords(module):
         if keyword.keyword in data:
             value = _parse_dynamic_value(keyword, data.get(keyword.keyword))
-            if value is not None:
+            if value is not None or partial:
                 dynamic_data[keyword.keyword] = value
         elif keyword.is_required and not partial:
             raise ServiceError(f'{keyword.label}不能为空')
     return dynamic_data
+
+
+def _company_from_payload(data, allow_create=False):
+    company_id = data.get('company_id')
+    if company_id:
+        company = Company.query.get(company_id)
+        if not company:
+            raise ServiceError('公司不存在', 404)
+        return company
+
+    company_code = _cell_text(data.get('company_code') or data.get('code'))
+    if not company_code:
+        raise ServiceError('公司不能为空')
+
+    company = Company.query.filter_by(code=company_code).first()
+    if company:
+        return company
+    if not allow_create:
+        raise ServiceError('公司不存在', 404)
+
+    company_name = _cell_text(data.get('company_name') or data.get('name')) or company_code
+    company = Company(code=company_code, name=company_name)
+    db.session.add(company)
+    db.session.flush()
+    return company
 
 
 def list_industry_data(module_code, args):
@@ -350,22 +392,18 @@ def list_industry_data(module_code, args):
 def create_industry_record(module_code, data):
     module = get_template_by_code(module_code, require_locked=False)
     _ensure_module_ready(module)
-    company_id = data.get('company_id')
+    company = _company_from_payload(data, allow_create=True)
     year = _parse_year(data.get('year'))
-    if not company_id:
-        raise ServiceError('公司不能为空')
-    if not Company.query.get(company_id):
-        raise ServiceError('公司不存在', 404)
 
     existing = CustomModuleData.query.filter_by(
-        module_id=module.id, company_id=company_id, year=year
+        module_id=module.id, company_id=company.id, year=year
     ).first()
     if existing:
         raise ServiceError('该公司该年份的记录已存在')
 
     record = CustomModuleData(
         module_id=module.id,
-        company_id=company_id,
+        company_id=company.id,
         year=year,
         data=_dynamic_data_from_payload(module, data)
     )
@@ -381,10 +419,8 @@ def update_industry_record(module_code, record_id, data):
     if not record:
         raise ServiceError('记录不存在', 404)
 
-    if 'company_id' in data:
-        if not Company.query.get(data['company_id']):
-            raise ServiceError('公司不存在', 404)
-        record.company_id = data['company_id']
+    if 'company_id' in data or 'company_code' in data or 'code' in data:
+        record.company_id = _company_from_payload(data, allow_create=True).id
     if 'year' in data:
         record.year = _parse_year(data.get('year'))
 
@@ -394,7 +430,7 @@ def update_industry_record(module_code, record_id, data):
     if duplicate and duplicate.id != record.id:
         raise ServiceError('该公司该年份的记录已存在')
 
-    dynamic_data = record.data or {}
+    dynamic_data = dict(record.data or {})
     dynamic_data.update(_dynamic_data_from_payload(module, data, partial=True))
     record.data = dynamic_data
     db.session.commit()
@@ -448,8 +484,8 @@ def import_industry_data(module_code, file_storage):
 
     for index, row in df.iterrows():
         try:
-            company_code = str(row.get('代码', '')).strip()
-            company_name = str(row.get('个股名称', '')).strip()
+            company_code = _cell_text(row.get('代码'))
+            company_name = _cell_text(row.get('个股名称'))
             year = _parse_year(row.get('年份'))
             if not company_code:
                 raise ServiceError('代码不能为空')
@@ -501,6 +537,8 @@ def compare_industry_data(module_code, data):
     metric = data.get('metric') or ''
     if not company_ids or not years or not metric:
         raise ServiceError('参数不完整')
+    if metric not in {keyword.keyword for keyword in user_keywords(module)}:
+        raise ServiceError('指标不存在')
 
     records = CustomModuleData.query.filter(
         CustomModuleData.module_id == module.id,

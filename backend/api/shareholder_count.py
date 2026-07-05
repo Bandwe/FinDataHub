@@ -4,10 +4,24 @@
 """
 from flask import request, jsonify
 from sqlalchemy import or_
+from datetime import datetime, date
 from . import api_bp
 from models import db, ShareholderCount, Company
 import pandas as pd
 import io
+
+
+def parse_stat_date(value):
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return datetime.strptime(value.strip(), '%Y-%m-%d').date()
+        except ValueError:
+            return None
+    return None
 
 
 @api_bp.route('/shareholder_count', methods=['GET'])
@@ -51,13 +65,14 @@ def get_shareholder_counts():
 def create_shareholder_count():
     """新增股东户数记录"""
     data = request.get_json()
+    stat_date = parse_stat_date(data.get('stat_date'))
     
-    if not data.get('company_id') or not data.get('stat_date'):
+    if not data.get('company_id') or not stat_date:
         return jsonify({'code': 400, 'message': '公司ID和统计日期不能为空'}), 400
     
     existing = ShareholderCount.query.filter_by(
         company_id=data['company_id'],
-        stat_date=data['stat_date']
+        stat_date=stat_date
     ).first()
     
     if existing:
@@ -65,7 +80,7 @@ def create_shareholder_count():
     
     record = ShareholderCount(
         company_id=data['company_id'],
-        stat_date=data['stat_date'],
+        stat_date=stat_date,
         total_holders=data.get('total_holders'),
         change=data.get('change')
     )
@@ -90,6 +105,11 @@ def update_shareholder_count(id):
         record.total_holders = data['total_holders']
     if 'change' in data:
         record.change = data['change']
+    if 'stat_date' in data:
+        stat_date = parse_stat_date(data.get('stat_date'))
+        if not stat_date:
+            return jsonify({'code': 400, 'message': '统计日期格式不正确'}), 400
+        record.stat_date = stat_date
     
     db.session.commit()
     

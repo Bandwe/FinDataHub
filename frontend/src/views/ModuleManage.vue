@@ -88,7 +88,7 @@
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="行业名称" prop="name">
-              <el-input v-model="form.name" placeholder="例如：半导体设备" />
+              <el-input v-model="form.name" placeholder="例如：半导体设备" :disabled="form.is_locked" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -96,7 +96,7 @@
               <el-input
                 v-model="form.code"
                 placeholder="例如：semiconductor_equipment"
-                :disabled="isEdit"
+                :disabled="isEdit || form.is_locked"
               />
             </el-form-item>
           </el-col>
@@ -105,24 +105,24 @@
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="图标">
-              <el-select v-model="form.icon" style="width: 100%">
+              <el-select v-model="form.icon" style="width: 100%" :disabled="form.is_locked">
                 <el-option v-for="icon in iconOptions" :key="icon" :label="icon" :value="icon" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="排序">
-              <el-input-number v-model="form.sort_order" :min="0" :max="999" />
+              <el-input-number v-model="form.sort_order" :min="0" :max="999" :disabled="form.is_locked" />
             </el-form-item>
           </el-col>
         </el-row>
 
         <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="说明该行业模板的适用范围" />
+          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="说明该行业模板的适用范围" :disabled="form.is_locked" />
         </el-form-item>
 
         <el-form-item label="启用">
-          <el-switch v-model="form.is_active" />
+          <el-switch v-model="form.is_active" :disabled="form.is_locked" />
         </el-form-item>
       </el-form>
 
@@ -175,7 +175,7 @@
 
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSave">保存草稿</el-button>
+        <el-button v-if="!form.is_locked" type="primary" :loading="saving" @click="handleSave">保存草稿</el-button>
         <el-button v-if="isEdit && !form.is_locked" type="success" :loading="saving" @click="handleSaveAndConfirm">
           保存并确认
         </el-button>
@@ -306,10 +306,13 @@ const payload = () => ({
   description: form.description,
   sort_order: form.sort_order,
   is_active: form.is_active,
-  fields: form.fields.map((field, index) => ({ ...field, sort_order: index }))
+  ...(form.is_locked ? {} : {
+    fields: form.fields.map((field, index) => ({ ...field, sort_order: index }))
+  })
 })
 
 const saveTemplate = async () => {
+  if (form.is_locked) return null
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return null
   saving.value = true

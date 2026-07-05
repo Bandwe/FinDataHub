@@ -119,6 +119,17 @@ def process_module_data(data_list, module_name, preview=False):
     field_mapping = schema['field_mapping']
     model = schema['model']
     key_fields = schema['key_fields']
+    db_field_labels = {value: key for key, value in field_mapping.items()}
+    db_field_labels.update({
+        'company_id': '代码/个股名称',
+        'year': '年份'
+    })
+    required_db_fields = {'company_id'}
+    for field in required_fields:
+        if field == '年份':
+            required_db_fields.add('year')
+        elif field in field_mapping:
+            required_db_fields.add(field_mapping[field])
     
     if data_list:
         columns = set(data_list[0].keys())
@@ -169,7 +180,16 @@ def process_module_data(data_list, module_name, preview=False):
                     try:
                         data['year'] = int(year_val)
                     except:
-                        pass
+                        data['year'] = None
+
+            missing_key_fields = [
+                db_field_labels.get(key, key)
+                for key in required_db_fields
+                if data.get(key) is None or data.get(key) == ''
+            ]
+            if missing_key_fields:
+                errors.append(f'第{idx+2}行: 缺少或无法解析必需字段 {", ".join(missing_key_fields)}')
+                continue
             
             if preview:
                 results.append({

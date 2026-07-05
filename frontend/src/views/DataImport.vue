@@ -157,8 +157,8 @@
       <!-- 步骤3: 导入结果 -->
       <div v-if="activeStep === 2" class="step-content">
         <el-result
-          :icon="importResult.success ? 'success' : 'error'"
-          :title="importResult.success ? '导入成功' : '导入失败'"
+          :icon="importResult.status || (importResult.success ? 'success' : 'error')"
+          :title="importResult.title || (importResult.success ? '导入成功' : '导入失败')"
           :sub-title="importResult.message"
         >
           <template #extra>
@@ -352,19 +352,35 @@ const executeImportInternal = async () => {
       responseData = await executeImportData(formData)
     }
     
+    const totalSuccess = responseData.total_success || 0
+    const detailValues = Object.values(responseData.details || {})
+    const totalError = detailValues.reduce((sum, detail) => sum + (detail.error || 0), 0)
+    const hasErrors = totalError > 0 || (responseData.errors || []).length > 0
+    const status = hasErrors ? (totalSuccess > 0 ? 'warning' : 'error') : 'success'
+
     importResult.value = {
-      success: true,
-      message: `成功导入 ${responseData.total_success} 条记录`,
+      success: status !== 'error',
+      status,
+      title: status === 'success' ? '导入成功' : (status === 'warning' ? '部分导入完成' : '导入失败'),
+      message: hasErrors ? `成功导入 ${totalSuccess} 条，失败 ${totalError} 条` : `成功导入 ${totalSuccess} 条记录`,
       details: responseData.details,
       errors: responseData.errors
     }
     activeStep.value = 2
 
-    ElMessage.success('导入成功')
+    if (status === 'success') {
+      ElMessage.success('导入成功')
+    } else if (status === 'warning') {
+      ElMessage.warning('部分导入完成，请检查错误信息')
+    } else {
+      ElMessage.error('导入失败')
+    }
   } catch (error) {
     console.error('导入失败:', error)
     importResult.value = {
       success: false,
+      status: 'error',
+      title: '导入失败',
       message: error.message || '导入失败'
     }
     activeStep.value = 2
