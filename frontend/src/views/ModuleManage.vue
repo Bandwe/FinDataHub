@@ -307,7 +307,14 @@ const payload = () => ({
   sort_order: form.sort_order,
   is_active: form.is_active,
   ...(form.is_locked ? {} : {
-    fields: form.fields.map((field, index) => ({ ...field, sort_order: index }))
+    fields: form.fields
+      .filter((field) => field.keyword.trim() || field.label.trim())
+      .map((field, index) => ({
+        ...field,
+        keyword: field.keyword.trim(),
+        label: field.label.trim(),
+        sort_order: index
+      }))
   })
 })
 

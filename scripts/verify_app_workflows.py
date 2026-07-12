@@ -232,6 +232,17 @@ def verify_fixed_import_errors(client, company_code, company_name):
 
 
 def verify_industry_templates(client, company_id, company_code, company_name, suffix):
+    blank_draft = client.request('POST', '/api/industry-templates', {
+        'code': f'qa_industry_blank_{suffix}',
+        'name': 'QA空字段草稿',
+        'fields': [
+            {'keyword': '', 'label': '', 'data_type': 'string', 'is_required': False},
+        ],
+    })
+    if blank_draft['keywords']:
+        raise AssertionError(f'blank draft fields should be ignored: {blank_draft}')
+    client.request('DELETE', f'/api/industry-templates/{blank_draft["id"]}')
+
     code = f'qa_industry_{suffix}'
     cleanup_actions = []
     template = client.request('POST', '/api/industry-templates', {

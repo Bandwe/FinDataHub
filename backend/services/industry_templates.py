@@ -105,10 +105,14 @@ def validate_fields(fields):
     normalized = []
     seen = set()
     for index, raw_field in enumerate(fields or []):
+        if not isinstance(raw_field, dict):
+            raise ServiceError(f'第{index + 1}个字段格式不正确')
         keyword = (raw_field.get('keyword') or '').strip()
         label = (raw_field.get('label') or '').strip()
         data_type = (raw_field.get('data_type') or 'string').strip()
 
+        if not keyword and not label:
+            continue
         if not keyword:
             raise ServiceError(f'第{index + 1}个字段的字段代码不能为空')
         if keyword in RESERVED_KEYWORDS:
