@@ -1,6 +1,31 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
+const responseMessage = async (error, fallback) => {
+  const data = error?.response?.data
+
+  if (data instanceof Blob) {
+    try {
+      const text = await data.text()
+      const parsed = JSON.parse(text)
+      return parsed.message || fallback
+    } catch {
+      return fallback
+    }
+  }
+
+  return data?.message || error?.message || fallback
+}
+
+const notifyError = (error, message, status) => {
+  const requestError = error instanceof Error ? error : new Error(message)
+  requestError.message = message
+  requestError.status = status
+  requestError.isNotified = true
+  ElMessage.error(message)
+  return requestError
+}
+
 // 创建axios实例
 const request = axios.create({
   baseURL: '/api',
@@ -30,14 +55,14 @@ request.interceptors.response.use(
 
     const res = response.data
     if (res.code !== 200) {
-      ElMessage.error(res.message || '请求失败')
-      return Promise.reject(new Error(res.message))
+      const message = res.message || '请求失败'
+      return Promise.reject(notifyError(new Error(message), message, res.code))
     }
     return res.data
   },
-  error => {
-    ElMessage.error(error.message || '网络错误')
-    return Promise.reject(error)
+  async error => {
+    const message = await responseMessage(error, '网络错误')
+    return Promise.reject(notifyError(error, message, error?.response?.status))
   }
 )
 

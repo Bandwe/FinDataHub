@@ -63,7 +63,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onBeforeUnmount, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   DataAnalysis, TrendCharts, Money, Wallet,
@@ -123,12 +123,21 @@ const fetchCustomModules = async () => {
   }
 }
 
+const handleIndustryTemplatesChanged = () => {
+  fetchCustomModules()
+}
+
 const goToCompanyManage = () => {
   router.push('/companies')
 }
 
 onMounted(() => {
   fetchCustomModules()
+  window.addEventListener('industry-templates-changed', handleIndustryTemplatesChanged)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('industry-templates-changed', handleIndustryTemplatesChanged)
 })
 </script>
 

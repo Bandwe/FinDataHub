@@ -207,6 +207,11 @@ const isEdit = ref(false)
 const formRef = ref(null)
 
 const iconOptions = ['Grid', 'DataAnalysis', 'TrendCharts', 'Money', 'Wallet', 'OfficeBuilding', 'Document']
+const fieldCodePattern = /^[A-Za-z][A-Za-z0-9_]*$/
+const reservedFieldCodes = new Set([
+  'code', 'name', 'year', 'id', 'module_id', 'company_id', 'company_code',
+  'company_name', 'created_at', 'updated_at', 'new_company_name'
+])
 
 const form = reactive({
   id: null,
@@ -220,12 +225,68 @@ const form = reactive({
   fields: []
 })
 
+const validateUniqueCode = (_rule, value, callback) => {
+  const code = (value || '').trim()
+  const duplicate = !isEdit.value && templates.value.some((item) => item.code === code)
+  if (duplicate) {
+    callback(new Error('行业代码已存在，请使用新的代码'))
+    return
+  }
+  callback()
+}
+
 const rules = {
   name: [{ required: true, message: '请输入行业名称', trigger: 'blur' }],
   code: [
     { required: true, message: '请输入行业代码', trigger: 'blur' },
-    { pattern: /^[A-Za-z][A-Za-z0-9_]*$/, message: '代码必须以字母开头，只能包含字母、数字和下划线', trigger: 'blur' }
+    { pattern: fieldCodePattern, message: '代码必须以字母开头，只能包含字母、数字和下划线', trigger: 'blur' },
+    { validator: validateUniqueCode, trigger: 'blur' }
   ]
+}
+
+const reportError = (error, fallback) => {
+  if (error?.isNotified) return
+  console.error(error)
+  ElMessage.error(error?.message || fallback)
+}
+
+const notifyMenuChanged = () => {
+  window.dispatchEvent(new CustomEvent('industry-templates-changed'))
+}
+
+const validateTemplateFields = () => {
+  const seen = new Set()
+
+  for (let index = 0; index < form.fields.length; index += 1) {
+    const field = form.fields[index]
+    const keyword = field.keyword.trim()
+    const label = field.label.trim()
+
+    if (!keyword && !label) continue
+    if (!keyword) {
+      ElMessage.error(`第 ${index + 1} 个字段缺少字段代码`)
+      return false
+    }
+    if (!fieldCodePattern.test(keyword)) {
+      ElMessage.error(`第 ${index + 1} 个字段代码必须以字母开头，只能包含字母、数字和下划线`)
+      return false
+    }
+    if (reservedFieldCodes.has(keyword)) {
+      ElMessage.error(`字段代码 ${keyword} 是系统保留字段`)
+      return false
+    }
+    if (seen.has(keyword)) {
+      ElMessage.error(`字段代码 ${keyword} 重复`)
+      return false
+    }
+    if (!label) {
+      ElMessage.error(`第 ${index + 1} 个字段缺少显示名称`)
+      return false
+    }
+    seen.add(keyword)
+  }
+
+  return true
 }
 
 const resetForm = () => {
@@ -247,8 +308,7 @@ const fetchTemplates = async () => {
   try {
     templates.value = await getAllIndustryTemplates()
   } catch (error) {
-    console.error(error)
-    ElMessage.error('获取行业模板失败')
+    reportError(error, '获取行业模板失败')
   } finally {
     loading.value = false
   }
@@ -300,8 +360,8 @@ const removeField = (index) => {
 }
 
 const payload = () => ({
-  name: form.name,
-  code: form.code,
+  name: form.name.trim(),
+  code: form.code.trim(),
   icon: form.icon,
   description: form.description,
   sort_order: form.sort_order,
@@ -321,7 +381,7 @@ const payload = () => ({
 const saveTemplate = async () => {
   if (form.is_locked) return null
   const valid = await formRef.value.validate().catch(() => false)
-  if (!valid) return null
+  if (!valid || !validateTemplateFields()) return null
   saving.value = true
   try {
     const saved = isEdit.value
@@ -332,8 +392,7 @@ const saveTemplate = async () => {
     form.id = saved.id
     return saved
   } catch (error) {
-    console.error(error)
-    ElMessage.error(error.message || '保存失败')
+    reportError(error, '保存失败')
     return null
   } finally {
     saving.value = false
@@ -364,11 +423,11 @@ const handleConfirm = async (row, refresh = true) => {
     })
     await confirmIndustryTemplate(row.id)
     ElMessage.success('模板已确认')
+    notifyMenuChanged()
     if (refresh) fetchTemplates()
   } catch (error) {
     if (error !== 'cancel') {
-      console.error(error)
-      ElMessage.error(error.message || '确认失败')
+      reportError(error, '确认失败')
     }
   }
 }
@@ -380,8 +439,7 @@ const handleClone = async (row) => {
     ElMessage.success('已复制为新草稿版本')
     fetchTemplates()
   } catch (error) {
-    console.error(error)
-    ElMessage.error(error.message || '复制失败')
+    reportError(error, '复制失败')
   }
 }
 
@@ -395,8 +453,7 @@ const handleDownload = async (row) => {
     link.click()
     window.URL.revokeObjectURL(url)
   } catch (error) {
-    console.error(error)
-    ElMessage.error('下载模板失败')
+    reportError(error, '下载模板失败')
   }
 }
 
@@ -409,11 +466,11 @@ const handleDelete = async (row) => {
     )
     await deleteIndustryTemplate(row.id)
     ElMessage.success('操作成功')
+    notifyMenuChanged()
     fetchTemplates()
   } catch (error) {
     if (error !== 'cancel') {
-      console.error(error)
-      ElMessage.error(error.message || '操作失败')
+      reportError(error, '操作失败')
     }
   }
 }
