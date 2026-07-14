@@ -5,6 +5,7 @@ import json
 import os
 import platform
 import re
+import signal
 import socket
 import subprocess
 import tempfile
@@ -71,6 +72,37 @@ def verify_web_app(base_url):
         raise RuntimeError('desktop JavaScript asset is missing or unexpectedly small')
 
 
+def terminate_process_tree(process):
+    if process.poll() is not None:
+        return
+
+    if os.name == 'nt':
+        subprocess.run(
+            ['taskkill', '/PID', str(process.pid), '/T', '/F'],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+            check=False,
+        )
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        if os.name == 'nt':
+            process.kill()
+        else:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        process.wait(timeout=10)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--executable', required=True)
@@ -98,34 +130,38 @@ def main():
             'FINDATA_HOST': '127.0.0.1',
             'FINDATA_PORT': str(port),
         })
-        process = subprocess.Popen(
-            [str(executable)],
-            cwd=executable.parent,
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
+        log_path = Path(data_dir) / 'desktop-process.log'
+        popen_options = (
+            {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP}
+            if os.name == 'nt'
+            else {'start_new_session': True}
         )
-        started_at = time.monotonic()
-        failure = None
-        try:
-            ready, error = wait_until_ready(process, base_url, args.timeout)
-            if not ready:
-                failure = error
-            else:
-                try:
-                    verify_web_app(base_url)
-                except Exception as exc:
-                    failure = str(exc)
-        finally:
-            if process.poll() is None:
-                process.terminate()
-                try:
-                    process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=10)
-            output = process.stdout.read() if process.stdout else ''
+        with log_path.open('w+', encoding='utf-8', errors='replace') as log_file:
+            process = subprocess.Popen(
+                [str(executable)],
+                cwd=executable.parent,
+                env=env,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                text=True,
+                **popen_options,
+            )
+            started_at = time.monotonic()
+            failure = None
+            try:
+                ready, error = wait_until_ready(process, base_url, args.timeout)
+                if not ready:
+                    failure = error
+                else:
+                    try:
+                        verify_web_app(base_url)
+                    except Exception as exc:
+                        failure = str(exc)
+            finally:
+                terminate_process_tree(process)
+                log_file.flush()
+                log_file.seek(0)
+                output = log_file.read()
 
         if failure:
             details = output[-8000:].strip()
