@@ -1,41 +1,29 @@
-import request from './request'
+import {
+  createModuleRecord,
+  deleteModuleRecord,
+  exportModuleRecords,
+  listModuleRecords,
+  updateModuleRecord
+} from './moduleCrud'
+
+const endpoint = '/rd_expense'
 
 export const getRdExpenses = (params) => {
-  return request({
-    url: '/rd_expense',
-    method: 'get',
-    params
-  })
+  return listModuleRecords(endpoint, params)
 }
 
 export const createRdExpense = (data) => {
-  return request({
-    url: '/rd_expense',
-    method: 'post',
-    data
-  })
+  return createModuleRecord(endpoint, data)
 }
 
 export const updateRdExpense = (id, data) => {
-  return request({
-    url: `/rd_expense/${id}`,
-    method: 'put',
-    data
-  })
+  return updateModuleRecord(endpoint, id, data)
 }
 
 export const deleteRdExpense = (id) => {
-  return request({
-    url: `/rd_expense/${id}`,
-    method: 'delete'
-  })
+  return deleteModuleRecord(endpoint, id)
 }
 
 export const exportRdExpense = (params) => {
-  return request({
-    url: '/rd_expense/export',
-    method: 'get',
-    params,
-    responseType: 'blob'
-  })
+  return exportModuleRecords(endpoint, params)
 }

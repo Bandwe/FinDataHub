@@ -8,6 +8,7 @@ import webbrowser
 from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 from config import SQLALCHEMY_DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS, CORS_ORIGINS
+from migrations import run_sqlite_migrations
 from models import db
 from api import api_bp
 
@@ -41,6 +42,18 @@ def create_app():
     app.register_blueprint(api_bp)
     
     # 错误处理
+    @app.errorhandler(400)
+    def bad_request(error):
+        if request.path.startswith('/api/'):
+            return jsonify({'code': 400, 'message': '请求格式不正确'}), 400
+        return error
+
+    @app.errorhandler(415)
+    def unsupported_media_type(error):
+        if request.path.startswith('/api/'):
+            return jsonify({'code': 415, 'message': '请求Content-Type必须为application/json'}), 415
+        return error
+
     @app.errorhandler(404)
     def not_found(error):
         if request.path.startswith('/api/'):
@@ -50,6 +63,7 @@ def create_app():
     
     @app.errorhandler(500)
     def internal_error(error):
+        db.session.rollback()
         return jsonify({'code': 500, 'message': '服务器内部错误'}), 500
     
     # 健康检查
@@ -84,6 +98,7 @@ if __name__ == '__main__':
     
     with app.app_context():
         db.create_all()
+        run_sqlite_migrations(app.config['SQLALCHEMY_DATABASE_URI'])
     
     def open_browser():
         time.sleep(1.5)

@@ -1,74 +1,76 @@
 <template>
-  <div class="module-manage-container">
-    <el-card class="module-card">
+  <div class="template-manage">
+    <el-card class="template-card">
       <template #header>
         <div class="card-header">
           <div class="header-left">
             <el-icon class="header-icon"><Grid /></el-icon>
-            <span class="header-title">自定义模块管理</span>
+            <span class="header-title">行业模板管理</span>
           </div>
-          <el-button type="primary" @click="handleAddModule">
+          <el-button type="primary" @click="handleAdd">
             <el-icon><Plus /></el-icon>
-            新增模块
+            新增行业
           </el-button>
         </div>
       </template>
 
       <el-alert
-        title="模块管理说明"
+        title="行业模板说明"
         type="info"
-        description="您可以在此添加、编辑或删除自定义模块。每个模块创建后会自动生成默认的表格关键词，您可以在关键词配置中进行自定义。"
+        description="每个行业对应一套固定字段。草稿模板可以编辑字段，确认模板后字段锁定，并会出现在左侧菜单中用于录入、导入和分析数据。"
         show-icon
         :closable="false"
-        class="module-info"
+        class="template-info"
       />
 
-      <el-table
-        :data="moduleList"
-        border
-        stripe
-        v-loading="loading"
-        class="module-table"
-      >
+      <el-table :data="templates" border stripe v-loading="loading">
         <el-table-column type="index" label="序号" width="70" align="center" />
-        <el-table-column prop="name" label="模块名称" min-width="150">
+        <el-table-column prop="name" label="行业名称" min-width="160">
           <template #default="{ row }">
-            <div class="module-name-cell">
-              <el-icon class="module-icon"><component :is="row.icon" /></el-icon>
+            <div class="name-cell">
+              <el-icon><component :is="row.icon || 'Grid'" /></el-icon>
               <span>{{ row.name }}</span>
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="code" label="模块代码" width="150" />
-        <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="keywords" label="关键词数量" width="120" align="center">
+        <el-table-column prop="code" label="行业代码" width="150" />
+        <el-table-column prop="version" label="版本" width="80" align="center" />
+        <el-table-column label="状态" width="150" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.is_locked ? 'success' : 'warning'">
+              {{ row.is_locked ? '已确认' : '草稿' }}
+            </el-tag>
+            <el-tag v-if="!row.is_active" type="info" class="status-tag">停用</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="字段" width="100" align="center">
           <template #default="{ row }">
             <el-tag type="info">{{ row.keywords?.length || 0 }} 个</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="is_active" label="状态" width="100" align="center">
-          <template #default="{ row }">
-            <el-switch
-              v-model="row.is_active"
-              @change="(val) => handleStatusChange(row, val)"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column prop="sort_order" label="排序" width="100" align="center" />
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column prop="description" label="描述" min-width="220" show-overflow-tooltip />
+        <el-table-column label="操作" width="390" fixed="right">
           <template #default="{ row }">
             <el-button-group>
-              <el-button type="primary" size="small" @click="handleEditKeywords(row)">
-                <el-icon><Setting /></el-icon>
-                关键词
-              </el-button>
-              <el-button type="warning" size="small" @click="handleEditModule(row)">
+              <el-button type="primary" size="small" @click="handleEdit(row)">
                 <el-icon><Edit /></el-icon>
-                编辑
+                {{ row.is_locked ? '查看' : '编辑' }}
               </el-button>
-              <el-button type="danger" size="small" @click="handleDeleteModule(row)">
+              <el-button v-if="!row.is_locked" type="success" size="small" @click="handleConfirm(row)">
+                <el-icon><CircleCheck /></el-icon>
+                确认
+              </el-button>
+              <el-button v-if="row.is_locked" type="warning" size="small" @click="handleClone(row)">
+                <el-icon><Document /></el-icon>
+                复制版本
+              </el-button>
+              <el-button v-if="row.is_locked && row.is_active" type="info" size="small" @click="handleDownload(row)">
+                <el-icon><Download /></el-icon>
+                模板
+              </el-button>
+              <el-button type="danger" size="small" @click="handleDelete(row)">
                 <el-icon><Delete /></el-icon>
-                删除
+                {{ row.is_active ? '停用/删' : '删除' }}
               </el-button>
             </el-button-group>
           </template>
@@ -76,150 +78,107 @@
       </el-table>
     </el-card>
 
-    <!-- 新增/编辑模块对话框 -->
     <el-dialog
-      v-model="moduleDialogVisible"
-      :title="isEdit ? '编辑模块' : '新增模块'"
-      width="500px"
+      v-model="dialogVisible"
+      :title="dialogTitle"
+      width="860px"
       destroy-on-close
     >
-      <el-form
-        ref="moduleFormRef"
-        :model="moduleForm"
-        :rules="moduleRules"
-        label-width="100px"
-      >
-        <el-form-item label="模块名称" prop="name">
-          <el-input v-model="moduleForm.name" placeholder="请输入模块名称" />
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="行业名称" prop="name">
+              <el-input v-model="form.name" placeholder="例如：半导体设备" :disabled="form.is_locked" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="行业代码" prop="code">
+              <el-input
+                v-model="form.code"
+                placeholder="例如：semiconductor_equipment"
+                :disabled="isEdit || form.is_locked"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="图标">
+              <el-select v-model="form.icon" style="width: 100%" :disabled="form.is_locked">
+                <el-option v-for="icon in iconOptions" :key="icon" :label="icon" :value="icon" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="排序">
+              <el-input-number v-model="form.sort_order" :min="0" :max="999" :disabled="form.is_locked" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item label="描述">
+          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="说明该行业模板的适用范围" :disabled="form.is_locked" />
         </el-form-item>
-        <el-form-item label="模块代码" prop="code">
-          <el-input
-            v-model="moduleForm.code"
-            placeholder="请输入模块代码（英文）"
-            :disabled="isEdit"
-          />
-        </el-form-item>
-        <el-form-item label="模块图标" prop="icon">
-          <el-select v-model="moduleForm.icon" placeholder="请选择图标" style="width: 100%">
-            <el-option
-              v-for="icon in iconOptions"
-              :key="icon.value"
-              :label="icon.label"
-              :value="icon.value"
-            >
-              <div class="icon-option">
-                <el-icon><component :is="icon.value" /></el-icon>
-                <span>{{ icon.label }}</span>
-              </div>
-            </el-option>
-          </el-select>
-        </el-form-item>
-        <el-form-item label="模块描述" prop="description">
-          <el-input
-            v-model="moduleForm.description"
-            type="textarea"
-            :rows="3"
-            placeholder="请输入模块描述"
-          />
-        </el-form-item>
-        <el-form-item label="排序顺序" prop="sort_order">
-          <el-input-number v-model="moduleForm.sort_order" :min="0" :max="999" />
-        </el-form-item>
-        <el-form-item label="启用状态" prop="is_active">
-          <el-switch v-model="moduleForm.is_active" />
+
+        <el-form-item label="启用">
+          <el-switch v-model="form.is_active" :disabled="form.is_locked" />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <el-button @click="moduleDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveModule" :loading="saveLoading">
-          保存
-        </el-button>
-      </template>
-    </el-dialog>
 
-    <!-- 关键词配置对话框 -->
-    <el-dialog
-      v-model="keywordDialogVisible"
-      title="表格关键词配置"
-      width="700px"
-      destroy-on-close
-    >
-      <div class="keyword-header">
-        <div class="keyword-info">
-          <span class="module-title">{{ currentModule?.name }}</span>
-          <span class="module-code">({{ currentModule?.code }})</span>
+      <div class="field-header">
+        <div>
+          <span class="field-title">模板字段</span>
+          <el-tag v-if="form.is_locked" type="success" class="status-tag">字段已锁定</el-tag>
+          <el-tag v-else type="warning" class="status-tag">草稿可编辑</el-tag>
         </div>
-        <el-button type="primary" size="small" @click="handleAddKeyword">
+        <el-button type="primary" size="small" :disabled="form.is_locked" @click="addField">
           <el-icon><Plus /></el-icon>
-          添加关键词
+          添加字段
         </el-button>
       </div>
 
-      <el-table
-        :data="keywordList"
-        border
-        stripe
-        size="small"
-        class="keyword-table"
-      >
+      <el-table :data="form.fields" border size="small" class="field-table">
         <el-table-column type="index" label="序号" width="60" align="center" />
-        <el-table-column prop="keyword" label="关键词" width="150">
+        <el-table-column label="字段代码" min-width="170">
           <template #default="{ row }">
-            <el-input v-if="row.isEditing" v-model="row.keyword" size="small" />
-            <span v-else>{{ row.keyword }}</span>
+            <el-input v-model="row.keyword" size="small" :disabled="form.is_locked" placeholder="english_key" />
           </template>
         </el-table-column>
-        <el-table-column prop="label" label="显示标签" width="150">
+        <el-table-column label="显示名称" min-width="170">
           <template #default="{ row }">
-            <el-input v-if="row.isEditing" v-model="row.label" size="small" />
-            <span v-else>{{ row.label }}</span>
+            <el-input v-model="row.label" size="small" :disabled="form.is_locked" placeholder="中文字段名" />
           </template>
         </el-table-column>
-        <el-table-column prop="data_type" label="数据类型" width="120">
+        <el-table-column label="类型" width="130">
           <template #default="{ row }">
-            <el-select v-if="row.isEditing" v-model="row.data_type" size="small">
-              <el-option label="字符串" value="string" />
+            <el-select v-model="row.data_type" size="small" :disabled="form.is_locked">
+              <el-option label="文本" value="string" />
               <el-option label="数字" value="number" />
               <el-option label="日期" value="date" />
             </el-select>
-            <el-tag v-else :type="getDataTypeTag(row.data_type)">
-              {{ getDataTypeLabel(row.data_type) }}
-            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="is_required" label="必填" width="80" align="center">
+        <el-table-column label="必填" width="80" align="center">
           <template #default="{ row }">
-            <el-switch v-if="row.isEditing" v-model="row.is_required" size="small" />
-            <el-icon v-else :color="row.is_required ? '#67C23A' : '#909399'">
-              <CircleCheck v-if="row.is_required" />
-              <CircleClose v-else />
-            </el-icon>
+            <el-switch v-model="row.is_required" size="small" :disabled="form.is_locked" />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
-          <template #default="{ row, $index }">
-            <template v-if="row.isEditing">
-              <el-button type="success" size="small" @click="handleSaveKeyword(row)">
-                保存
-              </el-button>
-              <el-button size="small" @click="handleCancelEdit(row, $index)">
-                取消
-              </el-button>
-            </template>
-            <template v-else>
-              <el-button type="primary" size="small" @click="handleEditKeyword(row)">
-                <el-icon><Edit /></el-icon>
-              </el-button>
-              <el-button type="danger" size="small" @click="handleDeleteKeyword(row, $index)">
-                <el-icon><Delete /></el-icon>
-              </el-button>
-            </template>
+        <el-table-column label="操作" width="90" align="center">
+          <template #default="{ $index }">
+            <el-button type="danger" link :disabled="form.is_locked" @click="removeField($index)">
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
 
       <template #footer>
-        <el-button @click="keywordDialogVisible = false">关闭</el-button>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button v-if="!form.is_locked" type="primary" :loading="saving" @click="handleSave">保存草稿</el-button>
+        <el-button v-if="isEdit && !form.is_locked" type="success" :loading="saving" @click="handleSaveAndConfirm">
+          保存并确认
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -228,393 +187,351 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Grid, Plus, Edit, Delete, CircleCheck, Document, Download } from '@element-plus/icons-vue'
 import {
-  Grid, Plus, Edit, Delete, Setting,
-  CircleCheck, CircleClose, TrendCharts, Money,
-  Wallet, DataAnalysis, UserFilled, User, Coin,
-  Avatar, OfficeBuilding, UploadFilled, Document,
-  Folder, FolderOpened, Files, List, Memo,
-  Collection, Notebook, Calendar, Timer, Watch,
-  AlarmClock, FirstAidKit, Box, Goods, Shop,
-  Sell, ShoppingBag, ShoppingCart, Present, Trophy,
-  Medal, WarningFilled, CircleCheckFilled
-} from '@element-plus/icons-vue'
-import {
-  getAllModules, createCustomModule, updateCustomModule, deleteCustomModule
-} from '../api/customModule'
-import {
-  getModuleKeywords, createModuleKeyword, updateModuleKeyword,
-  deleteModuleKeyword, batchUpdateKeywords
-} from '../api/customModule'
+  cloneIndustryTemplate,
+  confirmIndustryTemplate,
+  createIndustryTemplate,
+  deleteIndustryTemplate,
+  downloadIndustryTemplate,
+  getAllIndustryTemplates,
+  updateIndustryTemplate
+} from '../api/industryTemplate'
 
 const loading = ref(false)
-const saveLoading = ref(false)
-const moduleList = ref([])
-const moduleDialogVisible = ref(false)
-const keywordDialogVisible = ref(false)
+const saving = ref(false)
+const templates = ref([])
+const dialogVisible = ref(false)
+const dialogTitle = ref('')
 const isEdit = ref(false)
-const currentModule = ref(null)
-const keywordList = ref([])
+const formRef = ref(null)
 
-const moduleFormRef = ref(null)
-const moduleForm = reactive({
+const iconOptions = ['Grid', 'DataAnalysis', 'TrendCharts', 'Money', 'Wallet', 'OfficeBuilding', 'Document']
+const fieldCodePattern = /^[A-Za-z][A-Za-z0-9_]*$/
+const reservedFieldCodes = new Set([
+  'code', 'name', 'year', 'id', 'module_id', 'company_id', 'company_code',
+  'company_name', 'created_at', 'updated_at', 'new_company_name'
+])
+
+const form = reactive({
+  id: null,
   name: '',
   code: '',
   icon: 'Grid',
   description: '',
   sort_order: 0,
-  is_active: true
+  is_active: true,
+  is_locked: false,
+  fields: []
 })
 
-const moduleRules = {
-  name: [{ required: true, message: '请输入模块名称', trigger: 'blur' }],
-  code: [
-    { required: true, message: '请输入模块代码', trigger: 'blur' },
-    { pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/, message: '代码必须以字母开头，只能包含字母、数字和下划线', trigger: 'blur' }
-  ],
-  icon: [{ required: true, message: '请选择图标', trigger: 'change' }]
+const validateUniqueCode = (_rule, value, callback) => {
+  const code = (value || '').trim()
+  const duplicate = !isEdit.value && templates.value.some((item) => item.code === code)
+  if (duplicate) {
+    callback(new Error('行业代码已存在，请使用新的代码'))
+    return
+  }
+  callback()
 }
 
-const iconOptions = [
-  { value: 'Grid', label: '网格' },
-  { value: 'TrendCharts', label: '趋势图' },
-  { value: 'Money', label: '货币' },
-  { value: 'Wallet', label: '钱包' },
-  { value: 'DataAnalysis', label: '数据分析' },
-  { value: 'UserFilled', label: '用户(填充)' },
-  { value: 'User', label: '用户' },
-  { value: 'Coin', label: '硬币' },
-  { value: 'Avatar', label: '头像' },
-  { value: 'OfficeBuilding', label: '办公楼' },
-  { value: 'UploadFilled', label: '上传' },
-  { value: 'Document', label: '文档' },
-  { value: 'Folder', label: '文件夹' },
-  { value: 'FolderOpened', label: '打开的文件夹' },
-  { value: 'Files', label: '文件' },
-  { value: 'List', label: '列表' },
-  { value: 'Memo', label: '备忘录' },
-  { value: 'Collection', label: '集合' },
-  { value: 'Notebook', label: '笔记本' },
-  { value: 'Calendar', label: '日历' },
-  { value: 'Timer', label: '计时器' },
-  { value: 'Watch', label: '手表' },
-  { value: 'AlarmClock', label: '闹钟' },
-  { value: 'FirstAidKit', label: '急救箱' },
-  { value: 'Box', label: '盒子' },
-  { value: 'Goods', label: '商品' },
-  { value: 'Shop', label: '商店' },
-  { value: 'Sell', label: '销售' },
-  { value: 'ShoppingBag', label: '购物袋' },
-  { value: 'ShoppingCart', label: '购物车' },
-  { value: 'Present', label: '礼物' },
-  { value: 'Trophy', label: '奖杯' },
-  { value: 'Medal', label: '奖牌' },
-  { value: 'WarningFilled', label: '警告' }
-]
+const rules = {
+  name: [{ required: true, message: '请输入行业名称', trigger: 'blur' }],
+  code: [
+    { required: true, message: '请输入行业代码', trigger: 'blur' },
+    { pattern: fieldCodePattern, message: '代码必须以字母开头，只能包含字母、数字和下划线', trigger: 'blur' },
+    { validator: validateUniqueCode, trigger: 'blur' }
+  ]
+}
 
-const fetchModules = async () => {
+const reportError = (error, fallback) => {
+  if (error?.isNotified) return
+  console.error(error)
+  ElMessage.error(error?.message || fallback)
+}
+
+const notifyMenuChanged = () => {
+  window.dispatchEvent(new CustomEvent('industry-templates-changed'))
+}
+
+const validateTemplateFields = () => {
+  const seen = new Set()
+
+  for (let index = 0; index < form.fields.length; index += 1) {
+    const field = form.fields[index]
+    const keyword = field.keyword.trim()
+    const label = field.label.trim()
+
+    if (!keyword && !label) continue
+    if (!keyword) {
+      ElMessage.error(`第 ${index + 1} 个字段缺少字段代码`)
+      return false
+    }
+    if (!fieldCodePattern.test(keyword)) {
+      ElMessage.error(`第 ${index + 1} 个字段代码必须以字母开头，只能包含字母、数字和下划线`)
+      return false
+    }
+    if (reservedFieldCodes.has(keyword)) {
+      ElMessage.error(`字段代码 ${keyword} 是系统保留字段`)
+      return false
+    }
+    if (seen.has(keyword)) {
+      ElMessage.error(`字段代码 ${keyword} 重复`)
+      return false
+    }
+    if (!label) {
+      ElMessage.error(`第 ${index + 1} 个字段缺少显示名称`)
+      return false
+    }
+    seen.add(keyword)
+  }
+
+  return true
+}
+
+const resetForm = () => {
+  Object.assign(form, {
+    id: null,
+    name: '',
+    code: '',
+    icon: 'Grid',
+    description: '',
+    sort_order: templates.value.length,
+    is_active: true,
+    is_locked: false,
+    fields: []
+  })
+}
+
+const fetchTemplates = async () => {
   loading.value = true
   try {
-    const data = await getAllModules()
-    moduleList.value = data || []
+    templates.value = await getAllIndustryTemplates()
   } catch (error) {
-    console.error('获取模块列表失败:', error)
-    ElMessage.error('获取模块列表失败')
+    reportError(error, '获取行业模板失败')
   } finally {
     loading.value = false
   }
 }
 
-const handleAddModule = () => {
+const handleAdd = () => {
   isEdit.value = false
-  Object.assign(moduleForm, {
-    name: '',
-    code: '',
-    icon: 'Grid',
-    description: '',
-    sort_order: moduleList.value.length,
-    is_active: true
-  })
-  moduleDialogVisible.value = true
+  dialogTitle.value = '新增行业模板'
+  resetForm()
+  addField()
+  dialogVisible.value = true
 }
 
-const handleEditModule = (row) => {
+const handleEdit = (row) => {
   isEdit.value = true
-  Object.assign(moduleForm, {
+  dialogTitle.value = row.is_locked ? '查看行业模板' : '编辑行业模板'
+  Object.assign(form, {
     id: row.id,
     name: row.name,
     code: row.code,
-    icon: row.icon,
-    description: row.description,
-    sort_order: row.sort_order,
-    is_active: row.is_active
+    icon: row.icon || 'Grid',
+    description: row.description || '',
+    sort_order: row.sort_order || 0,
+    is_active: row.is_active,
+    is_locked: row.is_locked,
+    fields: (row.keywords || []).map((field, index) => ({
+      keyword: field.keyword,
+      label: field.label,
+      data_type: field.data_type || 'string',
+      is_required: !!field.is_required,
+      sort_order: field.sort_order ?? index
+    }))
   })
-  moduleDialogVisible.value = true
+  dialogVisible.value = true
 }
 
-const handleSaveModule = async () => {
-  const valid = await moduleFormRef.value.validate().catch(() => false)
-  if (!valid) return
-
-  saveLoading.value = true
-  try {
-    if (isEdit.value) {
-      await updateCustomModule(moduleForm.id, moduleForm)
-      ElMessage.success('更新成功')
-    } else {
-      await createCustomModule(moduleForm)
-      ElMessage.success('创建成功')
-    }
-    moduleDialogVisible.value = false
-    fetchModules()
-  } catch (error) {
-    console.error('保存失败:', error)
-    ElMessage.error(error.message || '保存失败')
-  } finally {
-    saveLoading.value = false
-  }
-}
-
-const handleDeleteModule = async (row) => {
-  try {
-    await ElMessageBox.confirm(
-      `确定要删除模块 "${row.name}" 吗？此操作将同时删除该模块的所有关键词配置。`,
-      '确认删除',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
-
-    await deleteCustomModule(row.id)
-    ElMessage.success('删除成功')
-    fetchModules()
-  } catch (error) {
-    if (error !== 'cancel') {
-      console.error('删除失败:', error)
-      ElMessage.error(error.message || '删除失败')
-    }
-  }
-}
-
-const handleStatusChange = async (row, val) => {
-  try {
-    await updateCustomModule(row.id, { is_active: val })
-    ElMessage.success(val ? '模块已启用' : '模块已禁用')
-  } catch (error) {
-    console.error('状态更新失败:', error)
-    ElMessage.error('状态更新失败')
-    row.is_active = !val
-  }
-}
-
-const handleEditKeywords = async (row) => {
-  currentModule.value = row
-  keywordDialogVisible.value = true
-  await fetchKeywords(row.id)
-}
-
-const fetchKeywords = async (moduleId) => {
-  try {
-    const data = await getModuleKeywords(moduleId)
-    keywordList.value = (data || []).map(k => ({ ...k, isEditing: false }))
-  } catch (error) {
-    console.error('获取关键词失败:', error)
-    ElMessage.error('获取关键词失败')
-  }
-}
-
-const handleAddKeyword = () => {
-  const newKeyword = {
-    id: null,
+const addField = () => {
+  form.fields.push({
     keyword: '',
     label: '',
     data_type: 'string',
     is_required: false,
-    sort_order: keywordList.value.length,
-    isEditing: true,
-    isNew: true
-  }
-  keywordList.value.push(newKeyword)
+    sort_order: form.fields.length
+  })
 }
 
-const handleEditKeyword = (row) => {
-  row.isEditing = true
-  row._original = { ...row }
+const removeField = (index) => {
+  form.fields.splice(index, 1)
 }
 
-const handleSaveKeyword = async (row) => {
-  if (!row.keyword || !row.label) {
-    ElMessage.warning('关键词和显示标签不能为空')
-    return
-  }
+const payload = () => ({
+  name: form.name.trim(),
+  code: form.code.trim(),
+  icon: form.icon,
+  description: form.description,
+  sort_order: form.sort_order,
+  is_active: form.is_active,
+  ...(form.is_locked ? {} : {
+    fields: form.fields
+      .filter((field) => field.keyword.trim() || field.label.trim())
+      .map((field, index) => ({
+        ...field,
+        keyword: field.keyword.trim(),
+        label: field.label.trim(),
+        sort_order: index
+      }))
+  })
+})
 
+const saveTemplate = async () => {
+  if (form.is_locked) return null
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid || !validateTemplateFields()) return null
+  saving.value = true
   try {
-    const data = {
-      keyword: row.keyword,
-      label: row.label,
-      data_type: row.data_type,
-      is_required: row.is_required,
-      sort_order: row.sort_order
-    }
-
-    if (row.isNew) {
-      await createModuleKeyword(currentModule.value.id, data)
-      ElMessage.success('添加成功')
-    } else {
-      await updateModuleKeyword(currentModule.value.id, row.id, data)
-      ElMessage.success('更新成功')
-    }
-
-    row.isEditing = false
-    row.isNew = false
-    delete row._original
-    await fetchKeywords(currentModule.value.id)
+    const saved = isEdit.value
+      ? await updateIndustryTemplate(form.id, payload())
+      : await createIndustryTemplate(payload())
+    ElMessage.success('保存成功')
+    isEdit.value = true
+    form.id = saved.id
+    return saved
   } catch (error) {
-    console.error('保存关键词失败:', error)
-    ElMessage.error(error.message || '保存失败')
+    reportError(error, '保存失败')
+    return null
+  } finally {
+    saving.value = false
   }
 }
 
-const handleCancelEdit = (row, index) => {
-  if (row.isNew) {
-    keywordList.value.splice(index, 1)
-  } else {
-    Object.assign(row, row._original)
-    row.isEditing = false
-    delete row._original
-  }
+const handleSave = async () => {
+  const saved = await saveTemplate()
+  if (!saved) return
+  dialogVisible.value = false
+  fetchTemplates()
 }
 
-const handleDeleteKeyword = async (row, index) => {
-  if (row.isNew) {
-    keywordList.value.splice(index, 1)
-    return
-  }
+const handleSaveAndConfirm = async () => {
+  const saved = await saveTemplate()
+  if (!saved) return
+  await handleConfirm(saved, false)
+  dialogVisible.value = false
+  fetchTemplates()
+}
 
+const handleConfirm = async (row, refresh = true) => {
   try {
-    await ElMessageBox.confirm(
-      `确定要删除关键词 "${row.label}" 吗？`,
-      '确认删除',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
-
-    await deleteModuleKeyword(currentModule.value.id, row.id)
-    ElMessage.success('删除成功')
-    keywordList.value.splice(index, 1)
+    await ElMessageBox.confirm('确认后字段将锁定，后续需要复制新版本才能调整字段。确定确认模板吗？', '确认模板', {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    await confirmIndustryTemplate(row.id)
+    ElMessage.success('模板已确认')
+    notifyMenuChanged()
+    if (refresh) fetchTemplates()
   } catch (error) {
     if (error !== 'cancel') {
-      console.error('删除关键词失败:', error)
-      ElMessage.error(error.message || '删除失败')
+      reportError(error, '确认失败')
     }
   }
 }
 
-const getDataTypeTag = (type) => {
-  const map = { string: '', number: 'success', date: 'warning' }
-  return map[type] || ''
+const handleClone = async (row) => {
+  try {
+    const code = `${row.code}_v${(row.version || 1) + 1}`
+    await cloneIndustryTemplate(row.id, { code })
+    ElMessage.success('已复制为新草稿版本')
+    fetchTemplates()
+  } catch (error) {
+    reportError(error, '复制失败')
+  }
 }
 
-const getDataTypeLabel = (type) => {
-  const map = { string: '字符串', number: '数字', date: '日期' }
-  return map[type] || type
+const handleDownload = async (row) => {
+  try {
+    const blob = await downloadIndustryTemplate(row.code)
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${row.code}_template.xlsx`
+    link.click()
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    reportError(error, '下载模板失败')
+  }
 }
 
-onMounted(() => {
-  fetchModules()
-})
+const handleDelete = async (row) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定处理行业模板 "${row.name}" 吗？已有数据的模板会被停用，未录入数据的模板会被删除。`,
+      '停用或删除模板',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    )
+    await deleteIndustryTemplate(row.id)
+    ElMessage.success('操作成功')
+    notifyMenuChanged()
+    fetchTemplates()
+  } catch (error) {
+    if (error !== 'cancel') {
+      reportError(error, '操作失败')
+    }
+  }
+}
+
+onMounted(fetchTemplates)
 </script>
 
 <style scoped>
-.module-manage-container {
+.template-manage {
   padding: 20px;
 }
 
-.module-card {
-  max-width: 1400px;
+.template-card {
+  max-width: 1480px;
   margin: 0 auto;
 }
 
-.card-header {
+.card-header,
+.header-left,
+.name-cell,
+.field-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
+.card-header,
+.field-header {
+  justify-content: space-between;
+}
+
+.header-left,
+.name-cell {
   gap: 10px;
 }
 
 .header-icon {
+  color: #409EFF;
   font-size: 22px;
-  color: #409EFF;
 }
 
-.header-title {
+.header-title,
+.field-title {
   font-size: 18px;
   font-weight: 600;
-  color: #303133;
 }
 
-.module-info {
-  margin-bottom: 20px;
+.template-info {
+  margin-bottom: 18px;
 }
 
-.module-table {
-  margin-top: 10px;
+.status-tag {
+  margin-left: 8px;
 }
 
-.module-name-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.field-header {
+  margin: 12px 0;
+  padding-top: 12px;
+  border-top: 1px solid #ebeef5;
 }
 
-.module-icon {
-  font-size: 18px;
-  color: #409EFF;
-}
-
-.icon-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.keyword-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #EBEEF5;
-}
-
-.keyword-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.module-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.module-code {
-  font-size: 14px;
-  color: #909399;
-}
-
-.keyword-table {
-  margin-top: 10px;
+.field-table {
+  margin-top: 8px;
 }
 </style>

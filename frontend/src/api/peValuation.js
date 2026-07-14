@@ -1,41 +1,29 @@
-import request from './request'
+import {
+  createModuleRecord,
+  deleteModuleRecord,
+  exportModuleRecords,
+  listModuleRecords,
+  updateModuleRecord
+} from './moduleCrud'
+
+const endpoint = '/pe_valuation'
 
 export const getPeValuations = (params) => {
-  return request({
-    url: '/pe_valuation',
-    method: 'get',
-    params
-  })
+  return listModuleRecords(endpoint, params)
 }
 
 export const createPeValuation = (data) => {
-  return request({
-    url: '/pe_valuation',
-    method: 'post',
-    data
-  })
+  return createModuleRecord(endpoint, data)
 }
 
 export const updatePeValuation = (id, data) => {
-  return request({
-    url: `/pe_valuation/${id}`,
-    method: 'put',
-    data
-  })
+  return updateModuleRecord(endpoint, id, data)
 }
 
 export const deletePeValuation = (id) => {
-  return request({
-    url: `/pe_valuation/${id}`,
-    method: 'delete'
-  })
+  return deleteModuleRecord(endpoint, id)
 }
 
 export const exportPeValuation = (params) => {
-  return request({
-    url: '/pe_valuation/export',
-    method: 'get',
-    params,
-    responseType: 'blob'
-  })
+  return exportModuleRecords(endpoint, params)
 }

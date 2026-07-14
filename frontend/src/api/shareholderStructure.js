@@ -1,41 +1,29 @@
-import request from './request'
+import {
+  createModuleRecord,
+  deleteModuleRecord,
+  exportModuleRecords,
+  listModuleRecords,
+  updateModuleRecord
+} from './moduleCrud'
+
+const endpoint = '/shareholder_structure'
 
 export const getShareholderStructures = (params) => {
-  return request({
-    url: '/shareholder_structure',
-    method: 'get',
-    params
-  })
+  return listModuleRecords(endpoint, params)
 }
 
 export const createShareholderStructure = (data) => {
-  return request({
-    url: '/shareholder_structure',
-    method: 'post',
-    data
-  })
+  return createModuleRecord(endpoint, data)
 }
 
 export const updateShareholderStructure = (id, data) => {
-  return request({
-    url: `/shareholder_structure/${id}`,
-    method: 'put',
-    data
-  })
+  return updateModuleRecord(endpoint, id, data)
 }
 
 export const deleteShareholderStructure = (id) => {
-  return request({
-    url: `/shareholder_structure/${id}`,
-    method: 'delete'
-  })
+  return deleteModuleRecord(endpoint, id)
 }
 
 export const exportShareholderStructure = (params) => {
-  return request({
-    url: '/shareholder_structure/export',
-    method: 'get',
-    params,
-    responseType: 'blob'
-  })
+  return exportModuleRecords(endpoint, params)
 }

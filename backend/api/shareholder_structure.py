@@ -4,10 +4,23 @@
 """
 from flask import request, jsonify
 from sqlalchemy import or_
+from datetime import datetime, date
 from . import api_bp
 from models import db, ShareholderStructure, Company
-import pandas as pd
 import io
+
+
+def parse_stat_date(value):
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return datetime.strptime(value.strip(), '%Y-%m-%d').date()
+        except ValueError:
+            return None
+    return None
 
 
 @api_bp.route('/shareholder_structure', methods=['GET'])
@@ -55,13 +68,14 @@ def get_shareholder_structures():
 def create_shareholder_structure():
     """新增股东结构记录"""
     data = request.get_json()
+    stat_date = parse_stat_date(data.get('stat_date'))
     
-    if not data.get('company_id') or not data.get('stat_date'):
+    if not data.get('company_id') or not stat_date:
         return jsonify({'code': 400, 'message': '公司ID和统计日期不能为空'}), 400
     
     existing = ShareholderStructure.query.filter_by(
         company_id=data['company_id'],
-        stat_date=data['stat_date'],
+        stat_date=stat_date,
         shareholder_type=data.get('shareholder_type', '')
     ).first()
     
@@ -70,7 +84,7 @@ def create_shareholder_structure():
     
     record = ShareholderStructure(
         company_id=data['company_id'],
-        stat_date=data['stat_date'],
+        stat_date=stat_date,
         shareholder_type=data.get('shareholder_type', ''),
         holding_ratio=data.get('holding_ratio'),
         change_ratio=data.get('change_ratio')
@@ -98,6 +112,11 @@ def update_shareholder_structure(id):
         record.change_ratio = data['change_ratio']
     if 'shareholder_type' in data:
         record.shareholder_type = data['shareholder_type']
+    if 'stat_date' in data:
+        stat_date = parse_stat_date(data.get('stat_date'))
+        if not stat_date:
+            return jsonify({'code': 400, 'message': '统计日期格式不正确'}), 400
+        record.stat_date = stat_date
     
     db.session.commit()
     
@@ -125,6 +144,8 @@ def delete_shareholder_structure(id):
 @api_bp.route('/shareholder_structure/export', methods=['GET'])
 def export_shareholder_structure():
     """导出 Excel 数据"""
+    import pandas as pd
+
     company_id = request.args.get('company_id', type=int)
     keyword = request.args.get('keyword', '')
 

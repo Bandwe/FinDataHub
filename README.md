@@ -5,6 +5,7 @@
 ## 功能特性
 
 - **8个数据模块**：毛利率与净利率、扣非净利润增长、ROE与净资产、PE估值、股东结构、股东户数、研发投入、研发团队
+- **行业模板**：支持创建行业字段模板，确认后锁定字段，并按公司、年份录入行业差异化数据
 - **数据管理**：支持手动录入、编辑、删除财务数据
 - **Excel 导入导出**：支持模板下载、数据批量导入、导出
 - **数据查询**：支持关键词搜索、年份筛选、指标范围筛选
@@ -17,7 +18,7 @@
 - Python 3.9+
 - Flask 3.0
 - SQLAlchemy (ORM)
-- MySQL 8.0（项目使用的SQLite）
+- SQLite
 - Pandas (Excel处理)
 
 ### 前端
@@ -68,17 +69,11 @@ FinDataHub/
 
 - Python 3.9+
 - Node.js 16+
-- MySQL 8.0
+- SQLite（随项目自动创建）
 
 ### 2. 数据库配置
 
-```bash
-# 登录MySQL
-mysql -u root -p
-
-# 执行初始化脚本
-source database/init.sql
-```
+默认使用 SQLite，数据库文件位于 `data/findata.db`。首次启动会自动创建表，可选执行 `backend/init_data.py` 初始化示例数据。
 
 ### 3. 后端启动
 
@@ -97,18 +92,11 @@ source venv/bin/activate
 # 安装依赖
 pip install -r requirements.txt
 
-# 配置数据库连接（可选，默认使用本地MySQL）
-export DB_HOST=localhost
-export DB_PORT=3306
-export DB_USER=root
-export DB_PASSWORD=your_password
-export DB_NAME=findata
-
 # 启动服务
 python run.py
 ```
 
-后端服务默认运行在 http://127.0.0.1:5000
+后端服务默认运行在 http://127.0.0.1:5002，可通过 `FINDATA_PORT` 覆盖。
 
 ### 4. 前端启动
 
@@ -151,6 +139,20 @@ npm run dev
 
 支持的模块名：profit_rate, non_recurring, roe_net_asset, pe_valuation, shareholder_structure, shareholder_count, rd_expense, rd_staff
 
+### 行业模板
+- `GET /api/industry-templates` - 获取已确认行业模板
+- `GET /api/industry-templates/all` - 获取全部行业模板
+- `POST /api/industry-templates` - 新建行业模板草稿
+- `PUT /api/industry-templates/<id>` - 更新草稿模板
+- `POST /api/industry-templates/<id>/confirm` - 确认并锁定模板字段
+- `POST /api/industry-templates/<id>/clone` - 复制为新版本草稿
+- `DELETE /api/industry-templates/<id>` - 删除或停用模板
+- `GET /api/industry-templates/<code>/template` - 下载行业模板 Excel
+- `GET/POST/PUT/DELETE /api/industry-data/<code>` - 管理行业模板数据
+- `POST /api/industry-data/<code>/import` - 导入行业数据
+- `GET /api/industry-data/<code>/export` - 导出行业数据
+- `POST /api/industry-data/<code>/compare` - 行业指标对比
+
 ## 开发说明
 
 ### 添加新模块
@@ -161,9 +163,8 @@ npm run dev
    - 在 `api/__init__.py` 中导入新模块
 
 2. 前端：
-   - 在 `src/views/` 创建新的视图组件
-   - 在 `src/router/index.js` 添加路由
-   - 在 `src/api/` 添加API请求函数（可选）
+   - 固定财务模块优先在统一配置中补充模块信息
+   - 行业差异化字段优先通过“行业模板”在页面中创建，无需新增代码
 
 ### 数据库迁移
 

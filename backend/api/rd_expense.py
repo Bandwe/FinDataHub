@@ -6,7 +6,6 @@ from flask import request, jsonify
 from sqlalchemy import or_
 from . import api_bp
 from models import db, RdExpense, Company
-import pandas as pd
 import io
 
 
@@ -133,6 +132,8 @@ def delete_rd_expense(id):
 @api_bp.route('/rd_expense/export', methods=['GET'])
 def export_rd_expense():
     """导出 Excel 数据"""
+    import pandas as pd
+
     company_id = request.args.get('company_id', type=int)
     year_from = request.args.get('year_from', type=int)
     year_to = request.args.get('year_to', type=int)

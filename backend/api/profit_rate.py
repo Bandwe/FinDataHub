@@ -7,7 +7,6 @@ from sqlalchemy import and_, or_
 from . import api_bp
 from models import db, ProfitRate, Company
 from utils.excel_parser import parse_profit_rate_excel
-import pandas as pd
 import io
 
 
@@ -143,6 +142,8 @@ def delete_profit_rate(id):
 @api_bp.route('/profit_rate/import', methods=['POST'])
 def import_profit_rate():
     """导入Excel数据"""
+    import pandas as pd
+
     if 'file' not in request.files:
         return jsonify({'code': 400, 'message': '未找到文件'}), 400
     
@@ -230,6 +231,8 @@ def import_profit_rate():
 @api_bp.route('/profit_rate/export', methods=['GET'])
 def export_profit_rate():
     """导出Excel数据"""
+    import pandas as pd
+
     company_id = request.args.get('company_id', type=int)
     year_from = request.args.get('year_from', type=int)
     year_to = request.args.get('year_to', type=int)

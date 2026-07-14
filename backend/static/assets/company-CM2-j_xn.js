@@ -1,0 +1,1 @@
+import{r as t}from"./index-BYg2x5VU.js";const a=e=>t({url:"/companies",method:"get",params:e}),n=()=>t({url:"/companies/all",method:"get"}),s=e=>t({url:"/companies",method:"post",data:e}),m=(e,o)=>t({url:`/companies/${e}`,method:"put",data:o}),p=e=>t({url:`/companies/${e}`,method:"delete"});export{a,s as c,p as d,n as g,m as u};

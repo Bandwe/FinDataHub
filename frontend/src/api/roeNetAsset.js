@@ -1,41 +1,29 @@
-import request from './request'
+import {
+  createModuleRecord,
+  deleteModuleRecord,
+  exportModuleRecords,
+  listModuleRecords,
+  updateModuleRecord
+} from './moduleCrud'
+
+const endpoint = '/roe_net_asset'
 
 export const getRoeNetAssets = (params) => {
-  return request({
-    url: '/roe_net_asset',
-    method: 'get',
-    params
-  })
+  return listModuleRecords(endpoint, params)
 }
 
 export const createRoeNetAsset = (data) => {
-  return request({
-    url: '/roe_net_asset',
-    method: 'post',
-    data
-  })
+  return createModuleRecord(endpoint, data)
 }
 
 export const updateRoeNetAsset = (id, data) => {
-  return request({
-    url: `/roe_net_asset/${id}`,
-    method: 'put',
-    data
-  })
+  return updateModuleRecord(endpoint, id, data)
 }
 
 export const deleteRoeNetAsset = (id) => {
-  return request({
-    url: `/roe_net_asset/${id}`,
-    method: 'delete'
-  })
+  return deleteModuleRecord(endpoint, id)
 }
 
 export const exportRoeNetAsset = (params) => {
-  return request({
-    url: '/roe_net_asset/export',
-    method: 'get',
-    params,
-    responseType: 'blob'
-  })
+  return exportModuleRecords(endpoint, params)
 }

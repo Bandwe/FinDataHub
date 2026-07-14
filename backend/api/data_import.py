@@ -5,123 +5,9 @@
 """
 from flask import request, jsonify
 from datetime import datetime
-from sqlalchemy import and_
 from . import api_bp
-from models import db, Company, ProfitRate, NonRecurring, RoeNetAsset, PeValuation
-from models import ShareholderStructure, ShareholderCount, RdExpense, RdStaff
-
-
-MODULE_SCHEMA = {
-    'profit_rate': {
-        'required_fields': ['代码', '个股名称', '年份'],
-        'optional_fields': ['销售毛利率(%)', '销售净利率(%)'],
-        'model': ProfitRate,
-        'key_fields': ['company_id', 'year'],
-        'field_mapping': {
-            '销售毛利率(%)': 'gross_profit_margin',
-            '销售净利率(%)': 'net_profit_margin'
-        },
-        'sheet_names': ['利润率', '毛利率']
-    },
-    'non_recurring': {
-        'required_fields': ['代码', '个股名称', '年份'],
-        'optional_fields': ['扣非净利润(亿元)', '扣非增长率'],
-        'model': NonRecurring,
-        'key_fields': ['company_id', 'year'],
-        'field_mapping': {
-            '扣非净利润(亿元)': 'non_recurring_profit',
-            '扣非增长率': 'non_recurring_growth'
-        },
-        'sheet_names': ['扣非净利润', '扣非']
-    },
-    'roe_net_asset': {
-        'required_fields': ['代码', '个股名称', '年份'],
-        'optional_fields': ['ROE(%)', '每股净资产(元)'],
-        'model': RoeNetAsset,
-        'key_fields': ['company_id', 'year'],
-        'field_mapping': {
-            'ROE(%)': 'roe',
-            '每股净资产(元)': 'net_asset_per_share'
-        },
-        'sheet_names': ['ROE与净资产', 'ROE', '净资产']
-    },
-    'pe_valuation': {
-        'required_fields': ['代码', '个股名称', '年份'],
-        'optional_fields': ['PE最高值', 'PE中间值', 'PE最低值', '每股收益', '类型(actual/forecast)', '备注'],
-        'model': PeValuation,
-        'key_fields': ['company_id', 'year', 'type'],
-        'field_mapping': {
-            'PE最高值': 'pe_high',
-            'PE中间值': 'pe_mid',
-            'PE最低值': 'pe_low',
-            '每股收益': 'eps',
-            '类型(actual/forecast)': 'type',
-            '备注': 'remark'
-        },
-        'sheet_names': ['PE估值', 'PE']
-    },
-    'shareholder_structure': {
-        'required_fields': ['代码', '个股名称', '统计日期(YYYY-MM-DD)'],
-        'optional_fields': ['股东类型', '持股比例(%)', '变动比例(%)'],
-        'model': ShareholderStructure,
-        'key_fields': ['company_id', 'stat_date', 'shareholder_type'],
-        'field_mapping': {
-            '统计日期(YYYY-MM-DD)': 'stat_date',
-            '股东类型': 'shareholder_type',
-            '持股比例(%)': 'holding_ratio',
-            '变动比例(%)': 'change_ratio'
-        },
-        'sheet_names': ['股东结构']
-    },
-    'shareholder_count': {
-        'required_fields': ['代码', '个股名称', '统计日期(YYYY-MM-DD)'],
-        'optional_fields': ['股东总人数', '较上期变化'],
-        'model': ShareholderCount,
-        'key_fields': ['company_id', 'stat_date'],
-        'field_mapping': {
-            '统计日期(YYYY-MM-DD)': 'stat_date',
-            '股东总人数': 'total_holders',
-            '较上期变化': 'change'
-        },
-        'sheet_names': ['股东户数']
-    },
-    'rd_expense': {
-        'required_fields': ['代码', '个股名称', '年份'],
-        'optional_fields': ['主营收入(元)', '研发费用(元)', '研发费用占比(%)', '费用增长率', '费用回报率'],
-        'model': RdExpense,
-        'key_fields': ['company_id', 'year'],
-        'field_mapping': {
-            '主营收入(元)': 'revenue',
-            '研发费用(元)': 'rd_expense',
-            '研发费用占比(%)': 'rd_ratio',
-            '费用增长率': 'rd_growth',
-            '费用回报率': 'rd_return'
-        },
-        'sheet_names': ['研发投入', '研发']
-    },
-    'rd_staff': {
-        'required_fields': ['代码', '个股名称', '年份'],
-        'optional_fields': ['研发人员规模', '同比增长', '占员工总数(%)', '本科人数', '硕士人数', '本科+硕士占比(%)', '备注'],
-        'model': RdStaff,
-        'key_fields': ['company_id', 'year'],
-        'field_mapping': {
-            '研发人员规模': 'staff_count',
-            '同比增长': 'growth',
-            '占员工总数(%)': 'percent_of_total',
-            '本科人数': 'bachelor',
-            '硕士人数': 'master',
-            '本科+硕士占比(%)': 'bachelor_master_ratio',
-            '备注': 'remark'
-        },
-        'sheet_names': ['研发人员', '研发人员']
-    }
-}
-
-# 工作表名称到模块key的映射
-SHEET_NAME_TO_MODULE = {}
-for module_key, schema in MODULE_SCHEMA.items():
-    for sheet_name in schema.get('sheet_names', []):
-        SHEET_NAME_TO_MODULE[sheet_name] = module_key
+from models import db, Company
+from services.module_registry import MODULE_SCHEMA, SHEET_NAME_TO_MODULE
 
 
 def parse_date(value):
@@ -233,6 +119,17 @@ def process_module_data(data_list, module_name, preview=False):
     field_mapping = schema['field_mapping']
     model = schema['model']
     key_fields = schema['key_fields']
+    db_field_labels = {value: key for key, value in field_mapping.items()}
+    db_field_labels.update({
+        'company_id': '代码/个股名称',
+        'year': '年份'
+    })
+    required_db_fields = {'company_id'}
+    for field in required_fields:
+        if field == '年份':
+            required_db_fields.add('year')
+        elif field in field_mapping:
+            required_db_fields.add(field_mapping[field])
     
     if data_list:
         columns = set(data_list[0].keys())
@@ -283,7 +180,16 @@ def process_module_data(data_list, module_name, preview=False):
                     try:
                         data['year'] = int(year_val)
                     except:
-                        pass
+                        data['year'] = None
+
+            missing_key_fields = [
+                db_field_labels.get(key, key)
+                for key in required_db_fields
+                if data.get(key) is None or data.get(key) == ''
+            ]
+            if missing_key_fields:
+                errors.append(f'第{idx+2}行: 缺少或无法解析必需字段 {", ".join(missing_key_fields)}')
+                continue
             
             if preview:
                 results.append({

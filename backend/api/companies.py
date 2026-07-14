@@ -5,7 +5,7 @@
 from flask import request, jsonify
 from sqlalchemy import or_
 from . import api_bp
-from models import db, Company
+from models import db, Company, CustomModuleData
 
 
 @api_bp.route('/companies', methods=['GET'])
@@ -103,7 +103,7 @@ def update_company(id):
 def delete_company(id):
     """删除公司"""
     company = Company.query.get_or_404(id)
-    
+    CustomModuleData.query.filter_by(company_id=id).delete(synchronize_session=False)
     db.session.delete(company)
     db.session.commit()
     

@@ -3,7 +3,6 @@
 Excel解析工具
 支持将宽表格式转换为长表格式
 """
-import pandas as pd
 import re
 
 
@@ -14,6 +13,8 @@ def parse_profit_rate_excel(df):
     1. 长表格式：代码、个股名称、年份、销售毛利率(%)、销售净利率(%)
     2. 宽表格式：代码、个股名称、2024毛利率、2024净利率、2023毛利率...
     """
+    import pandas as pd
+
     records = []
     
     # 检测是否为长表格式
@@ -73,6 +74,8 @@ def parse_profit_rate_excel(df):
 
 def parse_decimal(value):
     """解析数值，处理各种格式"""
+    import pandas as pd
+
     if pd.isna(value):
         return None
     try:

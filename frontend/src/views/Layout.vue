@@ -63,34 +63,28 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onBeforeUnmount, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   DataAnalysis, TrendCharts, Money, Wallet,
   UserFilled, User, Coin, Avatar, OfficeBuilding,
   UploadFilled, Grid
 } from '@element-plus/icons-vue'
-import { getCustomModules } from '../api/customModule'
+import { getIndustryTemplates } from '../api/industryTemplate'
+import { fixedModuleMenuItems } from '../modules/financialModules'
 
 const route = useRoute()
 const router = useRouter()
 
-// 自定义模块列表
+// 已确认行业模板列表
 const customModules = ref([])
 
 // 静态菜单项（避免使用计算属性动态获取路由）
 const staticMenuItems = [
-  { path: '/profit-rate', title: '毛利率与净利率', icon: 'TrendCharts' },
-  { path: '/non-recurring', title: '扣非净利润增长', icon: 'Money' },
-  { path: '/roe-net-asset', title: 'ROE与净资产', icon: 'Wallet' },
-  { path: '/pe-valuation', title: 'PE估值', icon: 'DataAnalysis' },
-  { path: '/shareholder-structure', title: '股东结构', icon: 'UserFilled' },
-  { path: '/shareholder-count', title: '股东户数', icon: 'User' },
-  { path: '/rd-expense', title: '研发投入', icon: 'Coin' },
-  { path: '/rd-staff', title: '研发团队', icon: 'Avatar' },
+  ...fixedModuleMenuItems,
   { path: '/companies', title: '公司管理', icon: 'OfficeBuilding' },
   { path: '/data-import', title: '数据导入', icon: 'UploadFilled' },
-  { path: '/module-manage', title: '模块管理', icon: 'Grid' }
+  { path: '/module-manage', title: '行业模板', icon: 'Grid' }
 ]
 
 // 当前页面图标
@@ -119,14 +113,18 @@ const currentTitle = computed(() => {
   return menuItem?.title || ''
 })
 
-// 获取自定义模块列表
+// 获取已确认行业模板列表
 const fetchCustomModules = async () => {
   try {
-    const modules = await getCustomModules()
+    const modules = await getIndustryTemplates()
     customModules.value = modules || []
   } catch (error) {
-    console.error('获取自定义模块失败:', error)
+    console.error('获取行业模板失败:', error)
   }
+}
+
+const handleIndustryTemplatesChanged = () => {
+  fetchCustomModules()
 }
 
 const goToCompanyManage = () => {
@@ -135,6 +133,11 @@ const goToCompanyManage = () => {
 
 onMounted(() => {
   fetchCustomModules()
+  window.addEventListener('industry-templates-changed', handleIndustryTemplatesChanged)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('industry-templates-changed', handleIndustryTemplatesChanged)
 })
 </script>
 

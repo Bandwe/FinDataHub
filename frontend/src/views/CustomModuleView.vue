@@ -19,7 +19,7 @@
     <el-card class="table-card">
       <template #header>
         <div class="table-header">
-          <span>{{ moduleInfo?.name || '自定义模块' }}数据</span>
+          <span>{{ moduleInfo?.name || '行业模板' }}数据</span>
           <div class="table-actions">
             <el-button type="primary" @click="handleAdd">
               <el-icon><Plus /></el-icon>新增
@@ -109,7 +109,7 @@
     </el-card>
 
     <!-- 新增/编辑对话框 -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px" destroy-on-close>
       <el-form :model="formData" label-width="120px">
         <el-form-item label="公司" required>
           <div style="display: flex; gap: 10px; align-items: center;">
@@ -136,7 +136,12 @@
           </div>
         </el-form-item>
         <el-form-item label="年份" required>
-          <el-input-number v-model="formData.year" :min="2000" :max="2100" />
+          <el-input-number
+            :key="`year-${formData.id ?? 'new'}`"
+            v-model="formData.year"
+            :min="2000"
+            :max="2100"
+          />
         </el-form-item>
         
         <!-- 动态生成表单字段 -->
@@ -262,16 +267,16 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, Upload, Download, DataLine } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
-import { getCustomModules } from '../api/customModule'
+import { getIndustryTemplates } from '../api/industryTemplate'
 import {
-  getCustomModuleData,
-  createCustomModuleData,
-  updateCustomModuleData,
-  deleteCustomModuleData,
-  exportCustomModuleData,
-  importCustomModuleData,
-  compareCustomModuleData
-} from '../api/customModuleData'
+  getIndustryData,
+  createIndustryData,
+  updateIndustryData,
+  deleteIndustryData,
+  exportIndustryData,
+  importIndustryData,
+  compareIndustryData
+} from '../api/industryData'
 import { getAllCompanies } from '../api/company'
 import request from '../api/request'
 import CompanyCompareDialog from '../components/CompanyCompareDialog.vue'
@@ -345,7 +350,7 @@ const compareMetrics = computed(() => {
 // 获取模块信息
 const fetchModuleInfo = async () => {
   try {
-    const modules = await getCustomModules()
+    const modules = await getIndustryTemplates()
     const module = modules.find(m => m.code === moduleCode.value)
     if (module) {
       moduleInfo.value = module
@@ -369,7 +374,7 @@ const fetchModuleInfo = async () => {
 const fetchData = async () => {
   loading.value = true
   try {
-    const res = await getCustomModuleData(moduleCode.value, {
+    const res = await getIndustryData(moduleCode.value, {
       page: pagination.page,
       per_page: pagination.per_page,
       keyword: searchForm.keyword
@@ -437,7 +442,7 @@ const handleEdit = (row) => {
   dialogTitle.value = '编辑记录'
   formData.id = row.id
   formData.company_id = row.company_id
-  formData.year = row.year
+  formData.year = Number(row.year)
   formData.new_company_name = ''
   moduleKeywords.value.forEach(kw => {
     formData[kw.keyword] = row[kw.keyword] !== undefined ? row[kw.keyword] : (kw.data_type === 'number' ? 0 : '')
@@ -449,7 +454,7 @@ const handleEdit = (row) => {
 const handleDelete = async (row) => {
   try {
     await ElMessageBox.confirm('确定删除该记录吗？', '提示', { type: 'warning' })
-    await deleteCustomModuleData(moduleCode.value, row.id)
+    await deleteIndustryData(moduleCode.value, row.id)
     ElMessage.success('删除成功')
     fetchData()
   } catch (error) {
@@ -511,10 +516,10 @@ const handleSubmit = async () => {
     })
 
     if (formData.id) {
-      await updateCustomModuleData(moduleCode.value, formData.id, submitData)
+      await updateIndustryData(moduleCode.value, formData.id, submitData)
       ElMessage.success('更新成功')
     } else {
-      await createCustomModuleData(moduleCode.value, submitData)
+      await createIndustryData(moduleCode.value, submitData)
       ElMessage.success('创建成功')
     }
     dialogVisible.value = false
@@ -600,7 +605,7 @@ const handleImportSubmit = async () => {
 
   importLoading.value = true
   try {
-    const res = await importCustomModuleData(moduleCode.value, importFile.value)
+    const res = await importIndustryData(moduleCode.value, importFile.value)
     ElMessage.success(res.message || '导入成功')
     importDialogVisible.value = false
     fetchData()
@@ -615,7 +620,7 @@ const handleImportSubmit = async () => {
 // 导出
 const handleExport = async () => {
   try {
-    const response = await exportCustomModuleData(moduleCode.value)
+    const response = await exportIndustryData(moduleCode.value)
     const blob = response
     const url = window.URL.createObjectURL(new Blob([blob]))
     const link = document.createElement('a')
@@ -636,7 +641,7 @@ const handleCompare = () => {
 }
 
 const fetchCompareData = async (params) => {
-  return await compareCustomModuleData(moduleCode.value, params)
+  return await compareIndustryData(moduleCode.value, params)
 }
 
 // 图表初始化

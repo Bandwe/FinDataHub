@@ -1,17 +1,18 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Layout from '../views/Layout.vue'
-import ProfitRate from '../views/ProfitRate.vue'
-import NonRecurring from '../views/NonRecurring.vue'
-import RoeNetAsset from '../views/RoeNetAsset.vue'
-import PeValuation from '../views/PeValuation.vue'
-import ShareholderStructure from '../views/ShareholderStructure.vue'
-import ShareholderCount from '../views/ShareholderCount.vue'
-import RdExpense from '../views/RdExpense.vue'
-import RdStaff from '../views/RdStaff.vue'
-import CompanyManage from '../views/CompanyManage.vue'
-import DataImport from '../views/DataImport.vue'
-import ModuleManage from '../views/ModuleManage.vue'
-import CustomModuleView from '../views/CustomModuleView.vue'
+
+const ProfitRate = () => import('../views/ProfitRate.vue')
+const NonRecurring = () => import('../views/NonRecurring.vue')
+const RoeNetAsset = () => import('../views/RoeNetAsset.vue')
+const PeValuation = () => import('../views/PeValuation.vue')
+const ShareholderStructure = () => import('../views/ShareholderStructure.vue')
+const ShareholderCount = () => import('../views/ShareholderCount.vue')
+const RdExpense = () => import('../views/RdExpense.vue')
+const RdStaff = () => import('../views/RdStaff.vue')
+const CompanyManage = () => import('../views/CompanyManage.vue')
+const DataImport = () => import('../views/DataImport.vue')
+const ModuleManage = () => import('../views/ModuleManage.vue')
+const CustomModuleView = () => import('../views/CustomModuleView.vue')
 
 const routes = [
   {
@@ -83,13 +84,13 @@ const routes = [
         path: 'module-manage',
         name: 'ModuleManage',
         component: ModuleManage,
-        meta: { title: '模块管理', icon: 'Grid' }
+        meta: { title: '行业模板', icon: 'Grid' }
       },
       {
         path: 'module/:moduleCode',
         name: 'CustomModule',
         component: CustomModuleView,
-        meta: { title: '自定义模块', icon: 'Grid' }
+        meta: { title: '行业数据', icon: 'Grid' }
       }
     ]
   }
