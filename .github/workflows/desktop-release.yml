@@ -29,12 +29,22 @@ jobs:
         include:
           - os: windows-latest
             platform: windows
-            label: Windows
+            arch: x86_64
+            label: Windows-x86_64
+            executable: backend/dist/FinDataHub.exe
             artifact_glob: dist_package/*_Windows.zip
-          - os: macos-latest
+          - os: macos-15-intel
             platform: macos
-            label: macOS
-            artifact_glob: dist_package/*_macOS.tar.gz
+            arch: x86_64
+            label: macOS-Intel
+            executable: backend/dist/FinDataHub
+            artifact_glob: dist_package/*_macOS_x86_64.tar.gz
+          - os: macos-15
+            platform: macos
+            arch: arm64
+            label: macOS-Apple-Silicon
+            executable: backend/dist/FinDataHub
+            artifact_glob: dist_package/*_macOS_arm64.tar.gz
 
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
@@ -86,9 +96,20 @@ jobs:
         working-directory: backend
         run: pyinstaller --clean build.spec
 
+      - name: Smoke test desktop executable
+        shell: bash
+        run: >-
+          python scripts/verify_desktop_executable.py
+          --executable "${{ matrix.executable }}"
+          --expected-arch "${{ matrix.arch }}"
+
       - name: Create release package
         shell: bash
-        run: python scripts/package_desktop.py --platform "${{ matrix.platform }}" --version "$RELEASE_TAG"
+        run: >-
+          python scripts/package_desktop.py
+          --platform "${{ matrix.platform }}"
+          --arch "${{ matrix.arch }}"
+          --version "$RELEASE_TAG"
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v7

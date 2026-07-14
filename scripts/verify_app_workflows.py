@@ -62,7 +62,7 @@ class Client:
     def __init__(self, base_url):
         self.base_url = base_url.rstrip('/')
 
-    def request(self, method, path, data=None, expected=200, raw=False, headers=None):
+    def request(self, method, path, data=None, expected=200, raw=False, headers=None, envelope=False):
         body = None
         request_headers = headers.copy() if headers else {}
         if data is not None and not isinstance(data, (bytes, bytearray)):
@@ -97,7 +97,7 @@ class Client:
         parsed = json.loads(payload.decode('utf-8'))
         if status == 200 and parsed.get('code') != 200:
             raise AssertionError(f'{method} {path} business failure: {parsed}')
-        return parsed.get('data')
+        return parsed if envelope else parsed.get('data')
 
     def multipart(self, path, fields, files, expected=200):
         boundary = '----FinDataHubBoundary' + uuid.uuid4().hex
@@ -229,6 +229,121 @@ def verify_fixed_import_errors(client, company_code, company_name):
     details = preview['preview']['profit_rate']
     if details['success_count'] != 0 or details['error_count'] != 2:
         raise AssertionError(f'fixed import row errors not reported correctly: {details}')
+
+
+def verify_request_robustness(client, suffix):
+    json_headers = {'Content-Type': 'application/json'}
+
+    malformed = client.request(
+        'POST', '/api/industry-templates', data=b'{"name":', expected=400,
+        headers=json_headers, envelope=True,
+    )
+    if malformed.get('message') != '请求JSON格式不正确':
+        raise AssertionError(f'malformed JSON error mismatch: {malformed}')
+
+    wrong_content_type = client.request(
+        'POST', '/api/industry-templates', data=b'name=x', expected=415,
+        headers={'Content-Type': 'text/plain'}, envelope=True,
+    )
+    if wrong_content_type.get('message') != '请求Content-Type必须为application/json':
+        raise AssertionError(f'content type error mismatch: {wrong_content_type}')
+
+    non_object = client.request(
+        'POST', '/api/industry-templates', data=[{'name': 'bad'}], expected=400,
+        envelope=True,
+    )
+    if non_object.get('message') != '请求体必须是JSON对象':
+        raise AssertionError(f'non-object JSON error mismatch: {non_object}')
+
+    invalid_boolean = client.request(
+        'POST', '/api/industry-templates', {
+            'name': 'QA无效布尔值', 'code': 'qa_ext_bad_bool',
+            'is_active': 'false', 'fields': [],
+        }, expected=400, envelope=True,
+    )
+    if invalid_boolean.get('message') != 'is_active 必须是布尔值':
+        raise AssertionError(f'invalid boolean error mismatch: {invalid_boolean}')
+    if 'SQL' in invalid_boolean.get('message', ''):
+        raise AssertionError(f'invalid boolean leaked SQL details: {invalid_boolean}')
+
+    invalid_fields = client.request(
+        'POST', '/api/industry-templates', {
+            'name': 'QA无效字段集合', 'code': 'qa_ext_bad_fields', 'fields': {},
+        }, expected=400, envelope=True,
+    )
+    if invalid_fields.get('message') != 'fields 必须是数组':
+        raise AssertionError(f'invalid fields error mismatch: {invalid_fields}')
+
+    invalid_sort_order = client.request(
+        'POST', '/api/industry-templates', {
+            'name': 'QA无效字段排序', 'code': 'qa_ext_bad_sort',
+            'fields': [{
+                'keyword': 'metric_value', 'label': '指标值',
+                'data_type': 'number', 'sort_order': '1',
+            }],
+        }, expected=400, envelope=True,
+    )
+    if invalid_sort_order.get('message') != 'sort_order 必须是整数':
+        raise AssertionError(f'invalid sort order error mismatch: {invalid_sort_order}')
+
+    pagination_template = client.request('POST', '/api/industry-templates', {
+        'name': 'QA分页测试模板',
+        'code': f'qa_industry_paging_{suffix}',
+        'fields': [
+            {'keyword': 'metric_value', 'label': '指标值', 'data_type': 'number'},
+        ],
+    })
+    try:
+        client.request('POST', f'/api/industry-templates/{pagination_template["id"]}/confirm')
+        invalid_page = client.request(
+            'GET', f'/api/industry-data/{pagination_template["code"]}?page=1&per_page=-1',
+            expected=400, envelope=True,
+        )
+        if invalid_page.get('message') != 'per_page 不能小于 1':
+            raise AssertionError(f'invalid pagination error mismatch: {invalid_page}')
+
+        invalid_company = client.request(
+            'POST', f'/api/industry-data/{pagination_template["code"]}', {
+                'company_id': '1', 'year': 2024, 'metric_value': 1,
+            }, expected=400, envelope=True,
+        )
+        if invalid_company.get('message') != 'company_id 必须是正整数':
+            raise AssertionError(f'invalid company id error mismatch: {invalid_company}')
+
+        invalid_compare = client.request(
+            'POST', f'/api/industry-data/{pagination_template["code"]}/compare', {
+                'company_ids': ['1'], 'years': [2024], 'metric': 'metric_value',
+            }, expected=400, envelope=True,
+        )
+        if invalid_compare.get('message') != 'company_ids 必须是正整数数组':
+            raise AssertionError(f'invalid compare error mismatch: {invalid_compare}')
+
+        malformed_data = client.request(
+            'POST', f'/api/industry-data/{pagination_template["code"]}',
+            data=b'{"year":', expected=400, headers=json_headers, envelope=True,
+        )
+        if malformed_data.get('message') != '请求JSON格式不正确':
+            raise AssertionError(f'malformed industry data error mismatch: {malformed_data}')
+    finally:
+        client.request('DELETE', f'/api/industry-templates/{pagination_template["id"]}')
+
+    fixed_malformed = client.request(
+        'POST', '/api/companies', data=b'{"name":', expected=400,
+        headers=json_headers, envelope=True,
+    )
+    if fixed_malformed.get('code') != 400:
+        raise AssertionError(f'fixed API malformed JSON mismatch: {fixed_malformed}')
+
+    fixed_content_type = client.request(
+        'POST', '/api/companies', data=b'name=x', expected=415,
+        headers={'Content-Type': 'text/plain'}, envelope=True,
+    )
+    if fixed_content_type.get('code') != 415:
+        raise AssertionError(f'fixed API content type mismatch: {fixed_content_type}')
+
+    templates = client.request('GET', '/api/industry-templates/all')
+    if any(item.get('code') == 'qa_ext_bad_bool' for item in templates):
+        raise AssertionError('invalid boolean request left a template behind')
 
 
 def verify_industry_templates(client, company_id, company_code, company_name, suffix):
@@ -364,6 +479,7 @@ def main():
         client.request('GET', '/health', raw=True)
         client.request('GET', '/', raw=True)
         purge_qa_artifacts(client)
+        verify_request_robustness(client, suffix)
         company = client.request('POST', '/api/companies', {
             'code': company_code,
             'name': company_name,

@@ -6,7 +6,6 @@ from datetime import date, datetime
 from io import BytesIO
 import re
 
-import pandas as pd
 from sqlalchemy import or_
 
 from models import db, Company, CustomModule, CustomModuleData, ModuleKeyword
@@ -85,8 +84,10 @@ def get_template_by_code(code, require_active=True, require_locked=False):
 
 
 def _validate_base_payload(data, existing=None):
-    name = (data.get('name') or '').strip()
-    code = (data.get('code') or '').strip()
+    if not isinstance(data, dict):
+        raise ServiceError('请求体必须是JSON对象')
+    name = _text_value(data, 'name', '')
+    code = _text_value(data, 'code', '')
     if not name:
         raise ServiceError('行业名称不能为空')
     if not existing and not code:
@@ -101,15 +102,57 @@ def _validate_base_payload(data, existing=None):
     return name, code
 
 
+def _text_value(data, key, default=''):
+    value = data.get(key, default)
+    if value is None:
+        value = default
+    if not isinstance(value, str):
+        raise ServiceError(f'{key} 必须是字符串')
+    return value.strip()
+
+
+def _boolean_value(data, key, default):
+    value = data.get(key, default)
+    if type(value) is not bool:
+        raise ServiceError(f'{key} 必须是布尔值')
+    return value
+
+
+def _nullable_integer_value(data, key, default=None, minimum=None):
+    value = data.get(key, default)
+    if value is None:
+        return None
+    if type(value) is not int:
+        raise ServiceError(f'{key} 必须是整数')
+    if minimum is not None and value < minimum:
+        raise ServiceError(f'{key} 不能小于 {minimum}')
+    return value
+
+
+def _integer_value(data, key, default, minimum=None, maximum=None):
+    value = data.get(key, default)
+    if type(value) is not int:
+        raise ServiceError(f'{key} 必须是整数')
+    if minimum is not None and value < minimum:
+        raise ServiceError(f'{key} 不能小于 {minimum}')
+    if maximum is not None and value > maximum:
+        raise ServiceError(f'{key} 不能大于 {maximum}')
+    return value
+
+
 def validate_fields(fields):
+    if not isinstance(fields, list):
+        raise ServiceError('fields 必须是数组')
     normalized = []
     seen = set()
     for index, raw_field in enumerate(fields or []):
         if not isinstance(raw_field, dict):
             raise ServiceError(f'第{index + 1}个字段格式不正确')
-        keyword = (raw_field.get('keyword') or '').strip()
-        label = (raw_field.get('label') or '').strip()
-        data_type = (raw_field.get('data_type') or 'string').strip()
+        keyword = _text_value(raw_field, 'keyword', '')
+        label = _text_value(raw_field, 'label', '')
+        data_type = _text_value(raw_field, 'data_type', 'string')
+        is_required = _boolean_value(raw_field, 'is_required', False)
+        sort_order = _integer_value(raw_field, 'sort_order', index, 0, 999)
 
         if not keyword and not label:
             continue
@@ -131,8 +174,8 @@ def validate_fields(fields):
             'keyword': keyword,
             'label': label,
             'data_type': data_type,
-            'is_required': bool(raw_field.get('is_required')),
-            'sort_order': raw_field.get('sort_order', index)
+            'is_required': is_required,
+            'sort_order': sort_order
         })
     return normalized
 
@@ -151,23 +194,31 @@ def replace_template_fields(module, fields):
         ))
 
 
+def _fields_payload(data):
+    if 'fields' in data:
+        return data['fields']
+    if 'keywords' in data:
+        return data['keywords']
+    return []
+
+
 def create_template(data):
     name, code = _validate_base_payload(data)
     module = CustomModule(
         name=name,
         code=code,
-        icon=data.get('icon') or 'Grid',
-        description=data.get('description') or '',
-        sort_order=data.get('sort_order') or 0,
-        is_active=data.get('is_active', True),
+        icon=_text_value(data, 'icon', 'Grid') or 'Grid',
+        description=_text_value(data, 'description', ''),
+        sort_order=_integer_value(data, 'sort_order', 0, 0, 999),
+        is_active=_boolean_value(data, 'is_active', True),
         is_locked=False,
-        version=data.get('version') or 1,
-        source_module_id=data.get('source_module_id'),
-        created_by=data.get('created_by') or 'admin'
+        version=_integer_value(data, 'version', 1, 1),
+        source_module_id=_nullable_integer_value(data, 'source_module_id', None, 1),
+        created_by=_text_value(data, 'created_by', 'admin') or 'admin'
     )
     db.session.add(module)
     db.session.flush()
-    replace_template_fields(module, data.get('fields') or data.get('keywords') or [])
+    replace_template_fields(module, _fields_payload(data))
     db.session.commit()
     return serialize_template(module)
 
@@ -181,12 +232,17 @@ def update_template(module_id, data):
     module.name = name
     if code:
         module.code = code
-    for attr in ('icon', 'description', 'sort_order', 'is_active'):
-        if attr in data:
-            setattr(module, attr, data[attr])
+    if 'icon' in data:
+        module.icon = _text_value(data, 'icon', 'Grid') or 'Grid'
+    if 'description' in data:
+        module.description = _text_value(data, 'description', '')
+    if 'sort_order' in data:
+        module.sort_order = _integer_value(data, 'sort_order', 0, 0, 999)
+    if 'is_active' in data:
+        module.is_active = _boolean_value(data, 'is_active', True)
 
     if not module.is_locked and ('fields' in data or 'keywords' in data):
-        replace_template_fields(module, data.get('fields') or data.get('keywords') or [])
+        replace_template_fields(module, _fields_payload(data))
 
     db.session.commit()
     return serialize_template(module)
@@ -217,22 +273,25 @@ def _next_clone_code(module, requested_code=None):
 
 
 def clone_template(module_id, data):
+    if not isinstance(data, dict):
+        raise ServiceError('请求体必须是JSON对象')
     source = get_template(module_id)
-    code = _next_clone_code(source, (data or {}).get('code'))
-    name = (data or {}).get('name') or f'{source.name} v{(source.version or 1) + 1}'
+    requested_code = _text_value(data, 'code', '') or None
+    code = _next_clone_code(source, requested_code)
+    name = _text_value(data, 'name', '') or f'{source.name} v{(source.version or 1) + 1}'
     _validate_base_payload({'name': name, 'code': code})
 
     clone = CustomModule(
         name=name,
         code=code,
-        icon=(data or {}).get('icon') or source.icon,
-        description=(data or {}).get('description') or source.description,
-        sort_order=(data or {}).get('sort_order') or source.sort_order,
+        icon=_text_value(data, 'icon', source.icon or 'Grid') or 'Grid',
+        description=_text_value(data, 'description', source.description or ''),
+        sort_order=_integer_value(data, 'sort_order', source.sort_order or 0, 0, 999),
         is_active=True,
         is_locked=False,
         version=(source.version or 1) + 1,
         source_module_id=source.id,
-        created_by=(data or {}).get('created_by') or 'admin'
+        created_by=_text_value(data, 'created_by', 'admin') or 'admin'
     )
     db.session.add(clone)
     db.session.flush()
@@ -256,6 +315,8 @@ def delete_or_disable_template(module_id):
 
 
 def make_template_workbook(module):
+    import pandas as pd
+
     columns = ['代码', '个股名称', '年份'] + [keyword.label for keyword in user_keywords(module)]
     sample = ['000001', '示例公司', datetime.now().year]
     for keyword in user_keywords(module):
@@ -278,12 +339,9 @@ def _blank(value):
     if isinstance(value, str):
         return value.strip() == ''
     try:
-        missing = pd.isna(value)
-        if isinstance(missing, bool):
-            return missing
+        return bool(value != value)
     except (TypeError, ValueError):
-        pass
-    return False
+        return False
 
 
 def _cell_text(value):
@@ -346,7 +404,9 @@ def _dynamic_data_from_payload(module, data, partial=False):
 
 def _company_from_payload(data, allow_create=False):
     company_id = data.get('company_id')
-    if company_id:
+    if company_id is not None:
+        if type(company_id) is not int or company_id < 1:
+            raise ServiceError('company_id 必须是正整数')
         company = Company.query.get(company_id)
         if not company:
             raise ServiceError('公司不存在', 404)
@@ -369,10 +429,25 @@ def _company_from_payload(data, allow_create=False):
     return company
 
 
+def _query_integer(args, key, default, minimum=None, maximum=None):
+    raw_value = args.get(key)
+    if raw_value in (None, ''):
+        return default
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ServiceError(f'{key} 必须是整数') from exc
+    if minimum is not None and value < minimum:
+        raise ServiceError(f'{key} 不能小于 {minimum}')
+    if maximum is not None and value > maximum:
+        raise ServiceError(f'{key} 不能大于 {maximum}')
+    return value
+
+
 def list_industry_data(module_code, args):
     module = get_template_by_code(module_code, require_locked=True)
-    page = args.get('page', 1, type=int)
-    per_page = args.get('per_page', 20, type=int)
+    page = _query_integer(args, 'page', 1, 1)
+    per_page = _query_integer(args, 'per_page', 20, 1, 500)
     keyword = args.get('keyword', '')
 
     query = CustomModuleData.query.filter_by(module_id=module.id)
@@ -451,6 +526,8 @@ def delete_industry_record(module_code, record_id):
 
 
 def export_industry_data(module_code):
+    import pandas as pd
+
     module = get_template_by_code(module_code, require_locked=True)
     records = CustomModuleData.query.filter_by(module_id=module.id).all()
     if not records:
@@ -476,6 +553,8 @@ def export_industry_data(module_code):
 
 
 def import_industry_data(module_code, file_storage):
+    import pandas as pd
+
     module = get_template_by_code(module_code, require_locked=False)
     _ensure_module_ready(module)
     if not file_storage or not file_storage.filename:
@@ -539,6 +618,12 @@ def compare_industry_data(module_code, data):
     company_ids = data.get('company_ids') or []
     years = data.get('years') or []
     metric = data.get('metric') or ''
+    if not isinstance(company_ids, list) or any(type(item) is not int or item < 1 for item in company_ids):
+        raise ServiceError('company_ids 必须是正整数数组')
+    if not isinstance(years, list) or any(type(item) is not int for item in years):
+        raise ServiceError('years 必须是整数数组')
+    if not isinstance(metric, str):
+        raise ServiceError('metric 必须是字符串')
     if not company_ids or not years or not metric:
         raise ServiceError('参数不完整')
     if metric not in {keyword.keyword for keyword in user_keywords(module)}:

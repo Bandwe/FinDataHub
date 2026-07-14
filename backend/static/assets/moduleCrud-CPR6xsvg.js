@@ -1,0 +1,1 @@
+import{r as t}from"./index-BYg2x5VU.js";const u=(e,r)=>t({url:e,method:"get",params:r}),s=(e,r)=>t({url:e,method:"post",data:r}),l=(e,r,o)=>t({url:`${e}/${r}`,method:"put",data:o}),c=(e,r)=>t({url:`${e}/${r}`,method:"delete"}),n=(e,r)=>t({url:`${e}/export`,method:"get",params:r,responseType:"blob"});export{s as c,c as d,n as e,u as l,l as u};

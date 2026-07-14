@@ -109,7 +109,7 @@
     </el-card>
 
     <!-- 新增/编辑对话框 -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px" destroy-on-close>
       <el-form :model="formData" label-width="120px">
         <el-form-item label="公司" required>
           <div style="display: flex; gap: 10px; align-items: center;">
@@ -136,7 +136,12 @@
           </div>
         </el-form-item>
         <el-form-item label="年份" required>
-          <el-input-number v-model="formData.year" :min="2000" :max="2100" />
+          <el-input-number
+            :key="`year-${formData.id ?? 'new'}`"
+            v-model="formData.year"
+            :min="2000"
+            :max="2100"
+          />
         </el-form-item>
         
         <!-- 动态生成表单字段 -->
@@ -437,7 +442,7 @@ const handleEdit = (row) => {
   dialogTitle.value = '编辑记录'
   formData.id = row.id
   formData.company_id = row.company_id
-  formData.year = row.year
+  formData.year = Number(row.year)
   formData.new_company_name = ''
   moduleKeywords.value.forEach(kw => {
     formData[kw.keyword] = row[kw.keyword] !== undefined ? row[kw.keyword] : (kw.data_type === 'number' ? 0 : '')

@@ -6,7 +6,6 @@ from flask import request, jsonify
 from sqlalchemy import or_
 from . import api_bp
 from models import db, RoeNetAsset, Company
-import pandas as pd
 import io
 
 
@@ -126,6 +125,8 @@ def delete_roe_net_asset(id):
 @api_bp.route('/roe_net_asset/export', methods=['GET'])
 def export_roe_net_asset():
     """导出Excel数据"""
+    import pandas as pd
+
     records = RoeNetAsset.query.join(Company).order_by(RoeNetAsset.year.desc(), Company.code).all()
     
     data = []

@@ -6,7 +6,6 @@ from flask import request, jsonify
 from sqlalchemy import or_
 from . import api_bp
 from models import db, PeValuation, Company
-import pandas as pd
 import io
 
 
@@ -139,6 +138,8 @@ def delete_pe_valuation(id):
 @api_bp.route('/pe_valuation/export', methods=['GET'])
 def export_pe_valuation():
     """导出 Excel 数据"""
+    import pandas as pd
+
     company_id = request.args.get('company_id', type=int)
     year_from = request.args.get('year_from', type=int)
     year_to = request.args.get('year_to', type=int)

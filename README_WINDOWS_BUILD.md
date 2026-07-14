@@ -4,8 +4,9 @@
 
 项目已内置 `.github/workflows/desktop-release.yml`，支持在 GitHub Actions 中自动构建：
 
-- Windows: `FinDataHub_v<版本>_Windows.zip`
-- macOS: `FinDataHub_v<版本>_macOS.tar.gz`
+- Windows x86_64: `FinDataHub_v<版本>_Windows.zip`
+- macOS Intel: `FinDataHub_v<版本>_macOS_x86_64.tar.gz`
+- macOS Apple Silicon: `FinDataHub_v<版本>_macOS_arm64.tar.gz`
 
 触发方式：
 
@@ -20,7 +21,8 @@
 3. 将前端 `dist` 复制到 `backend/static`。
 4. 安装后端依赖和 PyInstaller。
 5. 使用 `backend/build.spec` 构建单文件桌面程序。
-6. 使用 `scripts/package_desktop.py` 生成发布包并上传 Release。
+6. 实际启动桌面程序，验证健康接口、首页和前端静态资源。
+7. 使用 `scripts/package_desktop.py` 生成发布包并上传 Release。
 
 ## 前置要求
 
@@ -73,8 +75,9 @@ pyinstaller --clean build.spec
 
 #### 4. 准备发布包
 ```bash
-python scripts/package_desktop.py --platform windows --version 1.1.0
-python scripts/package_desktop.py --platform macos --version 1.1.0
+python scripts/package_desktop.py --platform windows --arch x86_64 --version 1.1.0
+python scripts/package_desktop.py --platform macos --arch x86_64 --version 1.1.0
+python scripts/package_desktop.py --platform macos --arch arm64 --version 1.1.0
 ```
 
 ## 发布包结构
@@ -85,7 +88,7 @@ FinDataHub_v1.0.0_Windows.zip
 ├── start.bat               # 启动脚本
 └── README.txt              # 使用说明
 
-FinDataHub_v1.0.0_macOS.tar.gz
+FinDataHub_v1.0.0_macOS_<架构>.tar.gz
 ├── FinDataHub              # 主程序（单文件）
 ├── start.command           # 启动脚本
 └── README.txt              # 使用说明
@@ -120,7 +123,7 @@ FinDataHub_v1.0.0_macOS.tar.gz
 
 ### 兼容性
 - Windows 10/11
-- macOS
+- macOS Intel 与 Apple Silicon 分包发布
 - 无需预装Python
 - 零依赖运行
 

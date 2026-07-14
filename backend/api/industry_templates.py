@@ -2,9 +2,10 @@
 """
 行业模板管理API
 """
-from flask import jsonify, request, send_file
+from flask import current_app, jsonify, send_file
 
 from . import api_bp
+from .common import json_object
 from models import db
 from services.industry_templates import (
     ServiceError,
@@ -29,7 +30,8 @@ def failure(error):
     db.session.rollback()
     if isinstance(error, ServiceError):
         return jsonify({'code': error.status_code, 'message': error.message}), error.status_code
-    return jsonify({'code': 500, 'message': str(error)}), 500
+    current_app.logger.exception('Industry template API error')
+    return jsonify({'code': 500, 'message': '服务器内部错误'}), 500
 
 
 @api_bp.route('/industry-templates', methods=['GET'])
@@ -59,7 +61,7 @@ def get_industry_template(template_id):
 @api_bp.route('/industry-templates', methods=['POST'])
 def create_industry_template():
     try:
-        return success(create_template(request.get_json() or {}), '创建成功')
+        return success(create_template(json_object()), '创建成功')
     except Exception as exc:
         return failure(exc)
 
@@ -67,7 +69,7 @@ def create_industry_template():
 @api_bp.route('/industry-templates/<int:template_id>', methods=['PUT'])
 def update_industry_template(template_id):
     try:
-        return success(update_template(template_id, request.get_json() or {}), '更新成功')
+        return success(update_template(template_id, json_object()), '更新成功')
     except Exception as exc:
         return failure(exc)
 
@@ -83,7 +85,7 @@ def confirm_industry_template(template_id):
 @api_bp.route('/industry-templates/<int:template_id>/clone', methods=['POST'])
 def clone_industry_template(template_id):
     try:
-        return success(clone_template(template_id, request.get_json() or {}), '复制成功')
+        return success(clone_template(template_id, json_object()), '复制成功')
     except Exception as exc:
         return failure(exc)
 

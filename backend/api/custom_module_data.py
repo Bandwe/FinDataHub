@@ -6,7 +6,6 @@ from flask import request, jsonify
 from . import api_bp
 from models import db, CustomModule, CustomModuleData, Company
 from sqlalchemy import or_
-import pandas as pd
 from io import BytesIO
 
 
@@ -178,6 +177,8 @@ def delete_custom_module_data(module_code, record_id):
 @api_bp.route('/custom-module-data/<string:module_code>/export', methods=['GET'])
 def export_custom_module_data(module_code):
     """导出自定义模块数据"""
+    import pandas as pd
+
     try:
         module = CustomModule.query.filter_by(code=module_code, is_active=True).first()
         if not module:
@@ -223,6 +224,8 @@ def export_custom_module_data(module_code):
 @api_bp.route('/custom-module-data/<string:module_code>/import', methods=['POST'])
 def import_custom_module_data(module_code):
     """导入自定义模块数据"""
+    import pandas as pd
+
     try:
         module = CustomModule.query.filter_by(code=module_code, is_active=True).first()
         if not module:

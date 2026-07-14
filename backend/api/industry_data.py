@@ -2,9 +2,10 @@
 """
 行业模板数据API
 """
-from flask import jsonify, request, send_file
+from flask import current_app, jsonify, request, send_file
 
 from . import api_bp
+from .common import json_object
 from models import db
 from services.industry_templates import (
     ServiceError,
@@ -26,7 +27,8 @@ def failure(error):
     db.session.rollback()
     if isinstance(error, ServiceError):
         return jsonify({'code': error.status_code, 'message': error.message}), error.status_code
-    return jsonify({'code': 500, 'message': str(error)}), 500
+    current_app.logger.exception('Industry data API error')
+    return jsonify({'code': 500, 'message': '服务器内部错误'}), 500
 
 
 @api_bp.route('/industry-data/<string:template_code>', methods=['GET'])
@@ -40,7 +42,7 @@ def get_industry_data(template_code):
 @api_bp.route('/industry-data/<string:template_code>', methods=['POST'])
 def create_industry_data(template_code):
     try:
-        return success(create_industry_record(template_code, request.get_json() or {}), '创建成功')
+        return success(create_industry_record(template_code, json_object()), '创建成功')
     except Exception as exc:
         return failure(exc)
 
@@ -48,7 +50,7 @@ def create_industry_data(template_code):
 @api_bp.route('/industry-data/<string:template_code>/<int:record_id>', methods=['PUT'])
 def update_industry_data(template_code, record_id):
     try:
-        return success(update_industry_record(template_code, record_id, request.get_json() or {}), '更新成功')
+        return success(update_industry_record(template_code, record_id, json_object()), '更新成功')
     except Exception as exc:
         return failure(exc)
 
@@ -88,6 +90,6 @@ def export_industry_records(template_code):
 @api_bp.route('/industry-data/<string:template_code>/compare', methods=['POST'])
 def compare_industry_records(template_code):
     try:
-        return success(compare_industry_data(template_code, request.get_json() or {}))
+        return success(compare_industry_data(template_code, json_object()))
     except Exception as exc:
         return failure(exc)

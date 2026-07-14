@@ -7,7 +7,6 @@ from sqlalchemy import or_
 from datetime import datetime, date
 from . import api_bp
 from models import db, ShareholderStructure, Company
-import pandas as pd
 import io
 
 
@@ -145,6 +144,8 @@ def delete_shareholder_structure(id):
 @api_bp.route('/shareholder_structure/export', methods=['GET'])
 def export_shareholder_structure():
     """导出 Excel 数据"""
+    import pandas as pd
+
     company_id = request.args.get('company_id', type=int)
     keyword = request.args.get('keyword', '')
 

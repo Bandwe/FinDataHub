@@ -42,6 +42,18 @@ def create_app():
     app.register_blueprint(api_bp)
     
     # 错误处理
+    @app.errorhandler(400)
+    def bad_request(error):
+        if request.path.startswith('/api/'):
+            return jsonify({'code': 400, 'message': '请求格式不正确'}), 400
+        return error
+
+    @app.errorhandler(415)
+    def unsupported_media_type(error):
+        if request.path.startswith('/api/'):
+            return jsonify({'code': 415, 'message': '请求Content-Type必须为application/json'}), 415
+        return error
+
     @app.errorhandler(404)
     def not_found(error):
         if request.path.startswith('/api/'):
@@ -51,6 +63,7 @@ def create_app():
     
     @app.errorhandler(500)
     def internal_error(error):
+        db.session.rollback()
         return jsonify({'code': 500, 'message': '服务器内部错误'}), 500
     
     # 健康检查

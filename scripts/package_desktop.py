@@ -3,6 +3,7 @@
 """Create desktop release archives from PyInstaller output."""
 import argparse
 import os
+import platform
 import shutil
 import stat
 import tarfile
@@ -28,7 +29,39 @@ def executable_path(platform_name):
     return ROOT / 'backend' / 'dist' / name
 
 
-def create_readme(platform_label):
+def normalize_arch(value=None):
+    arch = (value or platform.machine()).strip().lower()
+    aliases = {
+        'amd64': 'x86_64',
+        'x64': 'x86_64',
+        'x86_64': 'x86_64',
+        'aarch64': 'arm64',
+        'arm64': 'arm64',
+    }
+    if arch not in aliases:
+        raise ValueError(f'Unsupported architecture: {arch}')
+    return aliases[arch]
+
+
+def create_readme(platform_name, arch):
+    if platform_name == 'windows':
+        platform_label = 'Windows 10/11 (x86_64)'
+        launch_steps = """1. 解压本发布包到任意文件夹。
+2. 双击 start.bat，或直接运行 FinDataHub.exe。
+3. 程序启动后会自动打开浏览器；也可以手动访问 http://127.0.0.1:5001。"""
+        platform_notes = ''
+    else:
+        platform_label = f'macOS 12+ ({arch})'
+        launch_steps = """1. 解压本发布包到任意文件夹。
+2. 双击 start.command，或在终端运行 ./FinDataHub。
+3. 程序启动后会自动打开浏览器；也可以手动访问 http://127.0.0.1:5001。"""
+        platform_notes = """
+首次运行
+--------
+本项目未使用 Apple Developer 证书签名。若 macOS 阻止启动，请右键点击 start.command 并选择“打开”，
+或在“系统设置 > 隐私与安全性”中确认仍要打开。
+"""
+
     return f"""FinDataHub - 金融数据管理系统
 ===============================
 
@@ -36,9 +69,8 @@ def create_readme(platform_label):
 
 使用说明
 --------
-1. 解压本发布包到任意文件夹。
-2. Windows 双击 start.bat；macOS 双击 start.command，或在终端运行 ./FinDataHub。
-3. 程序启动后会自动打开浏览器；也可以手动访问 http://127.0.0.1:5001。
+{launch_steps}
+{platform_notes}
 
 数据存储
 --------
@@ -57,7 +89,7 @@ def package_windows(version):
     prepare_dir(release_dir)
 
     shutil.copy2(executable_path('windows'), release_dir / 'FinDataHub.exe')
-    write_text(release_dir / 'README.txt', create_readme('Windows 10/11'))
+    write_text(release_dir / 'README.txt', create_readme('windows', 'x86_64'))
     write_text(
         release_dir / 'start.bat',
         '@echo off\r\n'
@@ -76,8 +108,8 @@ def package_windows(version):
     return archive_path
 
 
-def package_macos(version):
-    release_name = f'FinDataHub_v{version}_macOS'
+def package_macos(version, arch):
+    release_name = f'FinDataHub_v{version}_macOS_{arch}'
     release_dir = DIST_DIR / release_name
     archive_path = DIST_DIR / f'{release_name}.tar.gz'
     prepare_dir(release_dir)
@@ -85,7 +117,7 @@ def package_macos(version):
     binary = release_dir / 'FinDataHub'
     shutil.copy2(executable_path('macos'), binary)
     binary.chmod(binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    write_text(release_dir / 'README.txt', create_readme('macOS'))
+    write_text(release_dir / 'README.txt', create_readme('macos', arch))
     launcher = release_dir / 'start.command'
     write_text(
         launcher,
@@ -112,15 +144,22 @@ def prepare_dir(path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--platform', choices=['windows', 'macos'], required=True)
+    parser.add_argument('--arch', choices=['x86_64', 'arm64'])
     parser.add_argument('--version', default='dev')
     args = parser.parse_args()
 
     version = normalize_version(args.version)
+    arch = normalize_arch(args.arch)
+    host_arch = normalize_arch()
+    if arch != host_arch:
+        raise SystemExit(f'Package architecture mismatch: requested {arch}, running on {host_arch}')
+    if args.platform == 'windows' and arch != 'x86_64':
+        raise SystemExit('Windows desktop packages currently support x86_64 only')
     source = executable_path(args.platform)
     if not source.exists():
         raise SystemExit(f'PyInstaller output not found: {source}')
 
-    archive = package_windows(version) if args.platform == 'windows' else package_macos(version)
+    archive = package_windows(version) if args.platform == 'windows' else package_macos(version, arch)
     print(archive)
 
 
